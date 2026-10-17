@@ -90,6 +90,11 @@ class NextConceptTransformer(Transformer):
         self._lvl_first = 0 if self.query_level0 else 1
         T = self.L if self.query_level0 else self.L - self.levels[0]
         P = config.prefix_len
+        # Read optional flags once: getattr on a missing DictConfig key raises and swallows an exception whose
+        # traceback cycles back to the caller's frame, so doing it in generate() kept every call's tensors alive
+        # until the cyclic GC ran.
+        self.raw_token_prefix = bool(getattr(config, 'raw_token_prefix', False))
+        self.contextual_prefix = bool(getattr(config, 'contextual_prefix', False))
 
         # Per-level RoPE: prefix at [0..P-1], each target chunk reset to [0..l_k-1].
         self.use_rope = bool(getattr(config, 'use_rope', False))
@@ -546,9 +551,9 @@ class NextConceptTransformer(Transformer):
         if self.use_ctx_encoder:
             prefix_emb = self._encode_context(prefix_tokens[:, :self.prefix_len])
         else:
-            if bool(getattr(self.config, 'raw_token_prefix', False)):
+            if self.raw_token_prefix:
                 _enc = self.vqvae_local[0].encoder
-                if bool(getattr(self.config, 'contextual_prefix', False)) and \
+                if self.contextual_prefix and \
                         len(getattr(_enc, 'blocks', [])) > 0:
                     z_prefix = _enc.forward_nopos(prefix_tokens)[:, :self.prefix_len, :]
                 else:
