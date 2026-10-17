@@ -71,8 +71,6 @@ class SelfAttention(nn.Module):
         self.dropout = config.dropout
         assert hasattr(torch.nn.functional, 'scaled_dot_product_attention')
 
-        self.caching, self.cached_k, self.cached_v = False, None, None
-
         # QK norm: RMSNorm over head_dim of Q and K, applied before RoPE as in Llama 3.
         self.use_qk_norm = bool(getattr(config, 'use_qk_norm', False))
         if self.use_qk_norm:
@@ -80,11 +78,9 @@ class SelfAttention(nn.Module):
             self.q_norm = RMSNorm(head_dim)
             self.k_norm = RMSNorm(head_dim)
 
-    def kv_caching(self, enable: bool):
-        self.caching, self.cached_k, self.cached_v = enable, None, None
-
-
-    def forward(self, x, attn_mask=None, rope_cos_sin=None, block_mask=None):
+    def forward(self, x, attn_mask=None, rope_cos_sin=None, block_mask=None, past_kv=None, return_kv=False):
+        """past_kv=(k, v) from an earlier call is attended over before x; return_kv=True also returns this
+        call's rotated (k, v). Nothing is stored on the module."""
         B, T, C = x.size()
         q, k, v = self.c_attn(x).split([self.n_embd, self._kv_dim, self._kv_dim], dim=2)
         hd = C // self.n_head
@@ -100,22 +96,20 @@ class SelfAttention(nn.Module):
             q = self.q_norm(q)
             k = self.k_norm(k)
 
-        # With KV caching the cache already holds rotated K, so rotate only [past_len, past_len+T).
+        # past_kv already holds rotated K, so rotate only [past_len, past_len+T).
         if rope_cos_sin is not None:
             cos_full, sin_full = rope_cos_sin
-            past_len = self.cached_k.size(2) if (self.caching and self.cached_k is not None) else 0
+            past_len = past_kv[0].size(2) if past_kv is not None else 0
             cos = cos_full[past_len:past_len + T]
             sin = sin_full[past_len:past_len + T]
             q = apply_rotary_emb(q, cos, sin)
             k = apply_rotary_emb(k, cos, sin)
 
-        if self.caching:
-            if self.cached_k is None:
-                self.cached_k = k
-                self.cached_v = v
-            else:
-                k = self.cached_k = torch.cat([self.cached_k, k], dim=2)
-                v = self.cached_v = torch.cat([self.cached_v, v], dim=2)
+        # k (without RoPE) and v are views into the fused qkv output; copy them so a kept cache doesn't hold it.
+        new_kv = (k.contiguous(), v.contiguous()) if return_kv else None
+        if past_kv is not None:
+            k = torch.cat([past_kv[0], k], dim=2)
+            v = torch.cat([past_kv[1], v], dim=2)
 
         if block_mask is not None:
             # flex_attention is not autocast-aware, so align q/k to v's dtype by hand.
@@ -130,7 +124,7 @@ class SelfAttention(nn.Module):
         y = y.transpose(1, 2).contiguous().view(B, T, C)
 
         y = self.resid_dropout(self.c_proj(y))
-        return y
+        return (y, new_kv) if return_kv else y
 
 class MLP(nn.Module):
 
@@ -194,15 +188,21 @@ class Block(nn.Module):
             return (self.rz1 if which == 1 else self.rz2) * h
         return h
 
-    def forward(self, x, attn_mask=None, rope_cos_sin=None, block_mask=None):
+    def forward(self, x, attn_mask=None, rope_cos_sin=None, block_mask=None, past_kv=None, return_kv=False):
+        kv = dict(past_kv=past_kv, return_kv=return_kv)
         if self.parallel_block:
             n = self.ln_1(x)
-            a = self.attn(n, attn_mask, rope_cos_sin=rope_cos_sin, block_mask=block_mask)
+            a = self.attn(n, attn_mask, rope_cos_sin=rope_cos_sin, block_mask=block_mask, **kv)
+            if return_kv:
+                a, new_kv = a
             m = self.mlp(n)
             if self.normformer:
                 a = self.ln_post_attn(a); m = self.ln_post_mlp(m)
-            return x + self._ls_scale(a, 1) + self._ls_scale(m, 2)
-        a = self.attn(self.ln_1(x), attn_mask, rope_cos_sin=rope_cos_sin, block_mask=block_mask)
+            x = x + self._ls_scale(a, 1) + self._ls_scale(m, 2)
+            return (x, new_kv) if return_kv else x
+        a = self.attn(self.ln_1(x), attn_mask, rope_cos_sin=rope_cos_sin, block_mask=block_mask, **kv)
+        if return_kv:
+            a, new_kv = a
         if self.normformer:
             a = self.ln_post_attn(a)
         x = x + self._ls_scale(a, 1)
@@ -210,7 +210,7 @@ class Block(nn.Module):
         if self.normformer:
             m = self.ln_post_mlp(m)
         x = x + self._ls_scale(m, 2)
-        return x
+        return (x, new_kv) if return_kv else x
     
 class Transformer(nn.Module):
     def __init__(self):

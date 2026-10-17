@@ -24,6 +24,7 @@ ap.add_argument("--mu", type=float, default=None)
 ap.add_argument("--adj", default=None)
 ap.add_argument("--l0", default="", help="unigram (default), active, uniform, or smooth:<eps> (mix eps of uniform into the unigram)")
 ap.add_argument("--out", required=True)
+ap.add_argument("--kv-cache", action="store_true", help="encode the prefix once and reuse its keys/values at every level")
 a = ap.parse_args()
 
 CFG = OmegaConf.load(a.config)
@@ -139,7 +140,7 @@ RAW = []
 
 def run(x, l0=None):
     with torch.no_grad():
-        g = net.generate(l0, x, temperature=temp, top_k=top_k, top_p=top_p, cfg_scale=cfg, cfg_null_eos=EOS)
+        g = net.generate(l0, x, temperature=temp, top_k=top_k, top_p=top_p, cfg_scale=cfg, cfg_null_eos=EOS, use_kv_cache=a.kv_cache)
         _, zl = tk.vqvae.vq.idx_to_zhats(g, return_zlevels=True)
         ids = pick_tokens(tk.vqvae.decoder(zl[-1])).tolist()
         RAW.extend(ids)
