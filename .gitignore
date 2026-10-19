@@ -222,3 +222,5 @@ benchmark/profile_output/
 artifacts/
 /eval/
 data/
+
+*.pdf
