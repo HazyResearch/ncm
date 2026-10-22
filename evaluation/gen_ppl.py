@@ -15,6 +15,10 @@ class GenPPLResult:
     mean_nll: float
     mean_ppl: float
 
+    @property
+    def unscored_examples(self):
+        return int((self.token_count == 0).sum().item())
+
 
 @torch.no_grad()
 def generation_perplexity(
@@ -29,7 +33,10 @@ def generation_perplexity(
     max_length: Optional[int] = None,
 ) -> GenPPLResult:
 
-    assert len(prompts) == len(generated_texts), "prompts and generated_texts must align"
+    if len(prompts) != len(generated_texts) or not prompts:
+        raise ValueError("nonempty prompts and generated_texts must align")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
     ref_model.eval()
 
     if device is None:
@@ -66,18 +73,27 @@ def generation_perplexity(
         input_ids = enc_full["input_ids"]
         attn_mask = enc_full["attention_mask"]
         offset_mapping = enc_full.get("offset_mapping", None)
+
+        if input_ids.shape[1] < 2:
+            nll_sums.append(torch.zeros(input_ids.shape[0]))
+            tok_counts.append(torch.zeros(input_ids.shape[0], dtype=torch.long))
+            continue
         
         if offset_mapping is not None:
             offset_mapping = offset_mapping.cpu()
             attn_mask_cpu  = attn_mask.cpu()
 
-        logits = ref_model(input_ids=input_ids, attention_mask=attn_mask).logits
+        model_kwargs = dict(input_ids=input_ids, attention_mask=attn_mask, use_cache=False)
+        if getattr(tokenizer, "padding_side", "right") == "left":
+            model_kwargs["position_ids"] = (attn_mask.long().cumsum(-1) - 1).clamp_min(0)
+        logits = ref_model(**model_kwargs).logits
 
         shift_logits = logits[:, :-1, :]
         shift_labels = input_ids[:, 1:]
         shift_mask   = attn_mask[:, 1:]
 
-        include = shift_mask.bool().clone()
+        # A pad token is not context for the first real token of a left-padded row.
+        include = shift_mask.bool() & attn_mask[:, :-1].bool()
 
         if score_only_generated:
             B = input_ids.size(0)
@@ -133,10 +149,13 @@ def generation_perplexity(
     tok_count_safe  = torch.clamp(tok_count, min=1)
     mean_nll_per_ex = nll_sum / tok_count_safe.float()
     ppl_per_ex      = torch.exp(mean_nll_per_ex)
+    ppl_per_ex[tok_count == 0] = float("nan")
 
     total_nll = float(nll_sum.sum().item())
     total_tok = int(tok_count.sum().item())
-    mean_nll  = total_nll / max(total_tok, 1)
+    if total_tok == 0:
+        raise ValueError("no tokens could be scored; check empty or truncated generations")
+    mean_nll  = total_nll / total_tok
     mean_ppl  = math.exp(mean_nll)
 
     return GenPPLResult(

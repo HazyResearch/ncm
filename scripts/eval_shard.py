@@ -1,4 +1,4 @@
-import argparse, os, pickle, sys
+import argparse, hashlib, os, pickle, sys
 import torch
 from omegaconf import OmegaConf
 sys.path.insert(0, os.environ.get("NCM_ROOT", os.getcwd()))
@@ -24,6 +24,7 @@ ap.add_argument("--mu", type=float, default=None)
 ap.add_argument("--adj", default=None)
 ap.add_argument("--l0", default="", help="unigram (default), active, uniform, or smooth:<eps> (mix eps of uniform into the unigram)")
 ap.add_argument("--out", required=True)
+ap.add_argument("--run-id", default="", help="shared identity of shards launched by evaluate.py")
 a = ap.parse_args()
 
 CFG = OmegaConf.load(a.config)
@@ -168,6 +169,17 @@ else:
             print(f"  shard0 {s}/{len(idxs)}", flush=True)
     out = {"idxs": idxs, "hyps": hyps, "refs": [r if isinstance(r, str) else dec(r) for r in (refs[i] for i in idxs)]}
 
+with open(a.config, "rb") as config_file:
+    config_hash = hashlib.sha256(config_file.read()).hexdigest()
+out["metadata"] = {
+    "run_id": a.run_id, "shard": a.shard, "nshards": a.nshards,
+    "config_sha256": config_hash, "checkpoint_dir": os.path.abspath(ck),
+    "data_dir": os.path.abspath(dd), "split": split, "n": n,
+    "n_inputs": None if UNCOND else len(items),
+    "policy": dict(temperature=temp, top_k=top_k, top_p=top_p, cfg=cfg,
+                   frequency=freq, deficit=mu, adjacency=adj, level0=L0_MODE,
+                   batch_size=bs),
+}
 os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
 pickle.dump(out, open(a.out, "wb"))
 print(f"shard {a.shard}: {len(hyps)} -> {a.out}")
