@@ -86,6 +86,79 @@ python evaluate.py --config config/eval/<dataset>.yaml --checkpoint-dir artifact
 
 This runs one generation shard per visible GPU, merges them, and prints ROUGE-1/2/L and generative perplexity for XSum; cased and lowercased sacreBLEU, chrF and length ratio for WMT14; solved, cell and valid-grid rates for Sudoku; and generative perplexity under GPT-2 large with unigram entropy, over 5 seeds of 256 unconditional samples, for TinyStories, OpenWebText and LM1B, the latter under the FLM scoring protocol. Add `--cfg <scale>` for classifier-free guidance on XSum and WMT14; the guided WMT14 row uses `--cfg 1.0`.
 
+### Adaptive concept levels
+
+Sudoku generation can stop each puzzle as soon as its decoded board satisfies
+all row, column, and box constraints and preserves every input clue. Verification
+uses the puzzle only, without looking at the reference solution. Solved samples
+leave the active generation batch; the remaining puzzles continue refining.
+
+```bash
+python evaluate.py --config config/eval/sudoku-easy.yaml \
+  --checkpoint-dir artifacts/sudoku-easy --data-dir data/sudoku-easy \
+  --adaptive sudoku --min-levels 4 --out eval/sudoku-easy-adaptive
+```
+
+`--min-levels` controls when verification starts (default 1). An optional
+`--max-levels K` caps generation at K consecutive concept levels, including
+level 0; omitting it uses the checkpoint's full hierarchy. If a puzzle remains
+unverified at the cap, its last decoded candidate is returned and is not marked
+verified. Level counts describe the hierarchy, not a fixed amount of work:
+later levels contain more positions. No levels are skipped or repeated.
+
+For a fixed-budget quality sweep on any task, use `--max-levels K` without
+`--adaptive`. For example:
+
+```bash
+python evaluate.py --config config/eval/xsum.yaml \
+  --checkpoint-dir artifacts/xsum --data-dir data/xsum \
+  --max-levels 5 --out eval/xsum-levels-5
+```
+
+Partial codes are reconstructed at the decoder's full output resolution.
+Early exit is opt-in; default generation still uses every level. Automatic
+verification currently supports Sudoku, on the unguided eager path without KV
+caching. Fixed budgets also support classifier-free guidance. Text tasks need
+a separately calibrated quality predictor before automatic exits are useful.
+
+Each shard records levels used per sample, verification outcomes, and generation
+wall time, including intermediate exit checks and final decoding. The merge
+prints these alongside task quality. The sum of worker times is not multi-GPU
+end-to-end latency; measure the whole evaluation separately if that is needed.
+Use a **fresh output directory for every policy/run**, because the launcher
+merges all matching shard files. Compare full generation and adaptive generation
+on identical inputs and hardware: extra decoding and verification can outweigh
+the saved refinement work. No quality or speed improvement is assumed. With
+stochastic sampling, shrinking the batch changes random-number consumption;
+the released Sudoku configs use greedy generation.
+
+The model API also accepts a custom stopping callback:
+
+```python
+# stop_fn(levels_used, full_resolution_latents, original_sample_ids) returns
+# one boolean per active sample. It must not mutate the supplied tensors.
+result = model.generate(
+    None, prefix_tokens, temperature=0,
+    max_levels=8, min_levels=4, stop_fn=stop_fn, return_info=True,
+)
+token_ids = tokenizer.vqvae.decoder(result.latents).argmax(-1)
+```
+
+`result.levels_used` and `result.stopped` are in original input order.
+`result.indices` is padded with -1 beyond each sample's completed levels; slice
+to `sum(model.levels[:levels_used])` before using those codes. `result.latents`
+already contains the full-resolution accumulated representation at each exit.
+`stopped` means the callback accepted the candidate, including candidates
+accepted at the final level; budget exhaustion alone does not mark acceptance.
+Without `return_info`, generation returns its usual code tensor, shortened to
+the requested budget if one is provided.
+
+Run the CPU regression tests (requires PyTorch, NumPy, and Hydra/OmegaConf):
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ## Repository layout
 
 - `evaluate.py`: evaluation entry point

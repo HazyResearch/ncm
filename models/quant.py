@@ -710,10 +710,19 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
 
     @torch.no_grad()
     def idx_to_z_q(self, indices):
+        """Reconstruct at full resolution from any complete prefix of levels."""
+        endpoints = []
+        total = 0
+        for level in self.levels:
+            total += level
+            endpoints.append(total)
+        if indices.ndim != 2 or indices.shape[1] not in endpoints:
+            raise ValueError("indices must contain a complete prefix of concept levels")
+        num_levels = endpoints.index(indices.shape[1]) + 1
         z_hat = torch.zeros(indices.shape[0], self.levels[-1], self.embed_dim, device=indices.device)
 
         level_accum = 0
-        for level_idx in range(len(self.levels)):
+        for level_idx in range(num_levels):
             emb_i = self.embeddings[level_idx]
             emb_at_level = emb_i(indices[:, level_accum : level_accum + self.levels[level_idx]])
             if level_idx != len(self.levels) - 1:

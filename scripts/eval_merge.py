@@ -20,6 +20,21 @@ hyps = [h for _, h, _ in rows]
 refs = [r for _, _, r in rows]
 print(f"\nmerged {len(parts)} shards -> {len(rows)} {CFG.task} outputs\n")
 
+generation = [p["generation"] for p in parts if "generation" in p]
+if generation:
+    if len(generation) != len(parts):
+        raise ValueError("cannot merge legacy shards with generation-policy shards; use a fresh output directory")
+    policies = {(g["adaptive"], g["max_levels"], g["min_levels"]) for g in generation}
+    if len(policies) != 1:
+        raise ValueError("shards use different generation policies; use a fresh output directory")
+    levels_used = [v for g in generation for v in g["levels_used"]]
+    verified = [v for g in generation for v in g["verified"]]
+    if levels_used:
+        print(f"concept levels: mean={np.mean(levels_used):.2f}, min={min(levels_used)}, max={max(levels_used)}")
+    if verified:
+        print(f"verified Sudoku outputs: {sum(verified)}/{len(verified)}")
+    print(f"generation GPU-worker seconds (includes exit checks and decoding): {sum(g['seconds'] for g in generation):.3f}\n")
+
 
 def bleu():
     import sacrebleu

@@ -1,10 +1,11 @@
-import argparse, os, pickle, sys
+import argparse, os, pickle, sys, time
 import torch
 from omegaconf import OmegaConf
 sys.path.insert(0, os.environ.get("NCM_ROOT", os.getcwd()))
 from models.next_concept import NextConceptTransformer
 from tokenization.vqvae_tokenizer import VQVAETokenizer
 from transformers import AutoTokenizer
+from evaluation.sudoku import is_sudoku_solution
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--config", required=True)
@@ -24,9 +25,20 @@ ap.add_argument("--mu", type=float, default=None)
 ap.add_argument("--adj", default=None)
 ap.add_argument("--l0", default="", help="unigram (default), active, uniform, or smooth:<eps> (mix eps of uniform into the unigram)")
 ap.add_argument("--out", required=True)
+ap.add_argument("--adaptive", choices=["sudoku"], default=None, help="stop each Sudoku sample once it is valid and preserves its clues")
+ap.add_argument("--max-levels", type=int, default=None, help="cap the number of concept levels, including level 0")
+ap.add_argument("--min-levels", type=int, default=1, help="earliest level at which adaptive verification runs")
 a = ap.parse_args()
 
 CFG = OmegaConf.load(a.config)
+if a.adaptive and str(CFG.tokenizer.pre_tokenizer.name) != "sudoku":
+    ap.error("--adaptive sudoku requires the Sudoku tokenizer")
+checkpoint_levels = len(CFG.model.vocab_size) + (not CFG.model.get("query_level0", False))
+level_budget = a.max_levels if a.max_levels is not None else checkpoint_levels
+if not 1 <= a.min_levels <= level_budget <= checkpoint_levels:
+    ap.error("require 1 <= min-levels <= max-levels <= checkpoint levels")
+if a.min_levels != 1 and not a.adaptive:
+    ap.error("--min-levels requires --adaptive")
 G = CFG.generation
 ck = a.checkpoint_dir or os.path.join("artifacts", CFG.task)
 dd = a.data_dir or os.path.join(os.environ.get("NCM_DATA_ROOT", "data"), CFG.task)
@@ -35,6 +47,8 @@ temp = pick(a.temp, "temperature", float, 1.0)
 top_k = pick(a.top_k, "top_k", int, 1)
 top_p = pick(a.top_p, "top_p", float, 0.0)
 cfg = pick(a.cfg, "cfg_scale", float, 0.0)
+if a.adaptive and cfg > 0:
+    ap.error("adaptive generation does not support classifier-free guidance")
 freq = pick(a.freq, "frequency_penalty", float, 0.0)
 mu = pick(a.mu, "frequency_deficit", float, 0.0)
 adj = str(a.adj if a.adj is not None else G.get("adjacency_penalty", "") or "")
@@ -135,15 +149,37 @@ def dec(ids):
 
 
 RAW = []
+LEVELS_USED, VERIFIED = [], []
+GENERATION_SECONDS = 0.0
 
 
 def run(x, l0=None):
+    global GENERATION_SECONDS
+    def stop_sudoku(level, latents, sample_ids):
+        candidates = pick_tokens(tk.vqvae.decoder(latents)).tolist()
+        puzzles = x[sample_ids].tolist()
+        return torch.tensor([is_sudoku_solution(c, p) for c, p in zip(candidates, puzzles)],
+                            dtype=torch.bool, device=x.device)
+
+    torch.cuda.synchronize()
+    started = time.perf_counter()
     with torch.no_grad():
-        g = net.generate(l0, x, temperature=temp, top_k=top_k, top_p=top_p, cfg_scale=cfg, cfg_null_eos=EOS)
-        _, zl = tk.vqvae.vq.idx_to_zhats(g, return_zlevels=True)
-        ids = pick_tokens(tk.vqvae.decoder(zl[-1])).tolist()
+        g = net.generate(l0, x, temperature=temp, top_k=top_k, top_p=top_p, cfg_scale=cfg, cfg_null_eos=EOS,
+                         max_levels=a.max_levels, min_levels=a.min_levels,
+                         stop_fn=stop_sudoku if a.adaptive else None, return_info=bool(a.adaptive))
+        if a.adaptive:
+            latents = g.latents
+            LEVELS_USED.extend(g.levels_used.tolist())
+            VERIFIED.extend(g.stopped.tolist())
+        else:
+            latents = tk.vqvae.vq.idx_to_z_q(g)
+            LEVELS_USED.extend([a.max_levels or len(net.levels)] * len(x))
+        ids = pick_tokens(tk.vqvae.decoder(latents)).tolist()
         RAW.extend(ids)
-        return [dec(r) for r in ids]
+        decoded = [dec(r) for r in ids]
+    torch.cuda.synchronize()
+    GENERATION_SECONDS += time.perf_counter() - started
+    return decoded
 
 
 hyps, sample_seed = [], []
@@ -169,5 +205,9 @@ else:
     out = {"idxs": idxs, "hyps": hyps, "refs": [r if isinstance(r, str) else dec(r) for r in (refs[i] for i in idxs)]}
 
 os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+out["generation"] = {
+    "adaptive": a.adaptive, "max_levels": a.max_levels or len(net.levels), "min_levels": a.min_levels,
+    "levels_used": LEVELS_USED, "verified": VERIFIED, "seconds": GENERATION_SECONDS,
+}
 pickle.dump(out, open(a.out, "wb"))
 print(f"shard {a.shard}: {len(hyps)} -> {a.out}")

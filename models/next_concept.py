@@ -1,10 +1,22 @@
 import math
+from dataclasses import dataclass
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from models.common import Transformer, Block, LayerNorm, precompute_rope_cos_sin
 from models.vqvae import VQVAE
 from utils.misc import count_params
+
+
+@dataclass
+class GenerationResult:
+    """Adaptive outputs in input order; indices beyond levels_used are -1."""
+
+    indices: torch.Tensor
+    latents: torch.Tensor
+    levels_used: torch.Tensor
+    stopped: torch.Tensor
+
 
 class _TiedCodebookHead(nn.Module):
     def __init__(self, n_embd, codebook, learn_scale=True, trainable=False, use_bias=False):
@@ -519,7 +531,24 @@ class NextConceptTransformer(Transformer):
 
     @torch.no_grad()
     def generate(self, idx, prefix_tokens, temperature=1.0, top_k=50, top_p=0.9,
-                 use_kv_cache=False, cfg_scale=0.0, cfg_null_eos=50256):
+                 use_kv_cache=False, cfg_scale=0.0, cfg_null_eos=50256,
+                 max_levels=None, min_levels=1, stop_fn=None, return_info=False):
+        """Generate a prefix of the learned hierarchy, without skipping levels.
+
+        stop_fn(levels_used, full_resolution_latents, original_sample_ids) returns
+        a boolean mask for the active batch. Accepted samples leave the batch.
+        A stopping callback requires return_info=True and the eager, unguided
+        path. The default call still returns the complete concept-code tensor.
+        """
+        budget = len(self.levels) if max_levels is None else max_levels
+        if isinstance(budget, bool) or not isinstance(budget, int) or not 1 <= budget <= len(self.levels):
+            raise ValueError(f"max_levels must be between 1 and {len(self.levels)}")
+        if isinstance(min_levels, bool) or not isinstance(min_levels, int) or not 1 <= min_levels <= budget:
+            raise ValueError("min_levels must be between 1 and max_levels")
+        if stop_fn is not None and not return_info:
+            raise ValueError("stop_fn requires return_info=True")
+        if return_info and (cfg_scale > 0 or use_kv_cache):
+            raise ValueError("return_info requires unguided generation without KV caching")
         assert not (self.query_level0 and use_kv_cache), \
             "query_level0 generation supports the eager path only"
 
@@ -642,6 +671,14 @@ class NextConceptTransformer(Transformer):
 
         generated_idx = [idx]
         idx_next = idx
+        if return_info:
+            active = torch.arange(B, device=dev)
+            result = GenerationResult(
+                indices=torch.full((B, sum(self.levels[:budget])), -1, dtype=torch.long, device=dev),
+                latents=torch.empty_like(z_hat),
+                levels_used=torch.zeros(B, dtype=torch.long, device=dev),
+                stopped=torch.zeros(B, dtype=torch.bool, device=dev),
+            )
         if use_kv_cache:
             self._set_kv_caching(True)
 
@@ -657,12 +694,41 @@ class NextConceptTransformer(Transformer):
                 prefix_kv = [(b.attn.cached_k, b.attn.cached_v) for b in self.transformer.blocks]
 
             level_acum = self.levels[0] if self.query_level0 else 0
-            for level_idx in range(len(self.levels)-1):
-                if self._cfg is not None:
-                    self._cfg["level"] = level_idx + 1
-
+            for level_idx in range(budget):
+                # The legacy tensor-only path needs no final latent reconstruction.
+                if level_idx == budget - 1 and not return_info:
+                    break
                 z_q_level = vq.embeddings[level_idx](idx_next)
                 z_hat, x = vq.get_next_autoregressive_input(level_idx, z_hat, z_q_level)
+
+                if return_info:
+                    used = level_idx + 1
+                    stop = torch.zeros(len(active), dtype=torch.bool, device=dev)
+                    if stop_fn is not None and used >= min_levels:
+                        stop = stop_fn(used, z_hat, active)
+                        if not isinstance(stop, torch.Tensor) or stop.dtype != torch.bool or stop.shape != active.shape:
+                            raise ValueError("stop_fn must return one boolean per active sample")
+                        stop = stop.to(dev)
+                    finished = stop | (used == budget)
+                    if finished.any():
+                        original = active[finished]
+                        codes = torch.cat(generated_idx, dim=1)
+                        result.indices[original, :codes.shape[1]] = codes[finished]
+                        result.latents[original] = z_hat[finished]
+                        result.levels_used[original] = used
+                        result.stopped[original] = stop[finished]
+                    keep = ~finished
+                    if not keep.any():
+                        break
+                    active = active[keep]
+                    z_hat, x = z_hat[keep], x[keep]
+                    prefix_emb = prefix_emb[keep]
+                    if _pbias is not None:
+                        _pbias = _pbias[keep]
+                    generated_idx = [codes[keep] for codes in generated_idx]
+
+                if self._cfg is not None:
+                    self._cfg["level"] = level_idx + 1
 
                 if self.use_post_upsample_conv:
                     x = self._apply_post_upsample_conv_single(x, level_idx + (1 - self._lvl_first))
@@ -695,10 +761,12 @@ class NextConceptTransformer(Transformer):
         finally:
             if use_kv_cache:
                 self._set_kv_caching(False)
+            self._cfg = None
+
+        if return_info:
+            return result
 
         out = torch.cat(generated_idx, dim=1)
-        if self._cfg is not None:
-            out = out[:self._cfg["B"]]
-        self._cfg = None
+        if cfg_scale > 0.0:
+            out = out[:_cB]
         return out
-    
