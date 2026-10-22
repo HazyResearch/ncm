@@ -608,14 +608,16 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
 
             z_hat = z_hat + quantized
             z_rest -= quantized
-            z_hats.append(z_hat)
-            z_levels.append(
-                F.interpolate(
-                    z_hat.transpose(-1, -2), size=(level,), mode="area"
-                ).transpose(-1, -2)
-                if i != num_levels - 1
-                else z_hat
-            )
+            if return_zhats:
+                z_hats.append(z_hat)
+            if return_zlevels:
+                z_levels.append(
+                    F.interpolate(
+                        z_hat.transpose(-1, -2), size=(level,), mode="area"
+                    ).transpose(-1, -2)
+                    if i != num_levels - 1
+                    else z_hat
+                )
 
         idx = torch.cat(idx, dim=-1)
 
@@ -648,7 +650,8 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
             else:
                 z_q_level = emb_at_level
             z_q_level = self._apply_quant_resi(z_q_level, level_idx)
-            z_hat.add_(z_q_level)
+            # Each entry is a snapshot of this level, not an alias of the final sum.
+            z_hat = z_hat + z_q_level
             z_hats.append(z_hat)
             if return_zlevels:
                 z_levels.append(
