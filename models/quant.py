@@ -299,7 +299,9 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
             emb.weight.data.normal_()
             emb.weight.requires_grad_(False)
         for i, vs in enumerate(self.vqvae_vocab_sizes):
-            self.register_buffer(f'ema_cluster_size_{i}', torch.zeros(vs))
+            # Counts start at 1.0 to match ema_w = codebook (as kmeans_init_level does); zeros make the first
+            # EMA update divide unused codes by ~epsilon and blow them up.
+            self.register_buffer(f'ema_cluster_size_{i}', torch.ones(vs))
             self.register_buffer(f'ema_w_{i}', self.embeddings[i].weight.data.clone())
             self.register_buffer(f'codebook_hit_{i}', torch.zeros(vs, dtype=torch.long))
 
