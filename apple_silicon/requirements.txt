@@ -1,0 +1,13 @@
+# Python 3.12 recommended (tested with 3.12, torch 2.15, mlx 0.32)
+mlx>=0.25
+torch>=2.4
+numpy
+omegaconf
+hydra-core
+transformers>=4.51
+huggingface_hub
+regex
+rouge_score
+sacrebleu
+safetensors
+rich
