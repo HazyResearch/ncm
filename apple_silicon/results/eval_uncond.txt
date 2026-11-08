@@ -1,0 +1,20 @@
+
+seed 42: genPPL 15.58  entropy 3.965
+ tinystories · 256  
+items · backend mlx 
+┏━━━━━━━━┳━━━━━━━━━┓
+┃ genPPL ┃ entropy ┃
+┡━━━━━━━━╇━━━━━━━━━┩
+│  15.58 │    3.96 │
+└────────┴─────────┘
+generation wall-clock 2.6s (100.1 items/s, batch 128); total 13.9s
+
+seed 42: genPPL 95.36  entropy 4.314
+  lm1b-small · 256  
+items · backend mlx 
+┏━━━━━━━━┳━━━━━━━━━┓
+┃ genPPL ┃ entropy ┃
+┡━━━━━━━━╇━━━━━━━━━┩
+│  95.36 │    4.31 │
+└────────┴─────────┘
+generation wall-clock 5.5s (46.6 items/s, batch 8); total 15.4s
