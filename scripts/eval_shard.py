@@ -5,7 +5,7 @@ sys.path.insert(0, os.environ.get("NCM_ROOT", os.getcwd()))
 from models.next_concept import NextConceptTransformer
 from tokenization.vqvae_tokenizer import VQVAETokenizer
 from utils.inference import add_speed_args
-from utils.fast_generation import CUDAGraphRunner, enable_resize_matmuls
+from utils.fast_generation import CUDAGraphRunner, enable_resize_matmuls, fuse_token_picker
 from transformers import AutoTokenizer
 
 ap = argparse.ArgumentParser()
@@ -168,6 +168,8 @@ if a.compile:
     ])
     decoder = torch.compile(decoder, fullgraph=True, dynamic=False)
     token_picker = torch.compile(token_picker, fullgraph=True, dynamic=False)
+
+token_picker = fuse_token_picker(token_picker, freq, mu, ADJ, ALLOW)
 
 
 @torch.inference_mode()

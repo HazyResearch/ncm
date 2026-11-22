@@ -3,6 +3,17 @@ import torch
 import torch.nn.functional as F
 
 
+def fuse_token_picker(picker, frequency, deficit, adjacency, allowance):
+    """Use fused CUDA penalties when available; keep the original fallback."""
+    if (frequency <= 0 and not adjacency) or not torch.cuda.is_available() or torch.version.hip:
+        return picker
+    try:
+        from utils.token_selection import FusedTokenPicker
+    except ImportError:
+        return picker
+    return FusedTokenPicker(picker, frequency, deficit, adjacency, allowance)
+
+
 def enable_resize_matmuls(vq):
     if vq.training:
         raise ValueError("Resize matrices are for an eval-mode codec")
