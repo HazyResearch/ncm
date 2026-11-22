@@ -4,6 +4,8 @@ from omegaconf import OmegaConf
 sys.path.insert(0, os.environ.get("NCM_ROOT", os.getcwd()))
 from models.next_concept import NextConceptTransformer
 from tokenization.vqvae_tokenizer import VQVAETokenizer
+from utils.inference import add_speed_args
+from utils.fast_generation import CUDAGraphRunner, enable_resize_matmuls
 from transformers import AutoTokenizer
 
 ap = argparse.ArgumentParser()
@@ -19,6 +21,7 @@ ap.add_argument("--temp", type=float, default=None)
 ap.add_argument("--top_k", type=int, default=None)
 ap.add_argument("--top_p", type=float, default=None)
 ap.add_argument("--cfg", type=float, default=None)
+add_speed_args(ap)
 ap.add_argument("--freq", type=float, default=None)
 ap.add_argument("--mu", type=float, default=None)
 ap.add_argument("--adj", default=None)
@@ -136,16 +139,45 @@ def dec(ids):
 
 RAW = []
 
+if a.resize_matmul:
+    enable_resize_matmuls(tk.vqvae.vq)
+
+decoder, token_picker = tk.vqvae.decoder, pick_tokens
+if a.compile:
+    # Hierarchy lengths, prefix-cache modes and the final partial batch can
+    # require several compiled variants of the same transformer block.
+    torch._dynamo.config.cache_size_limit = max(torch._dynamo.config.cache_size_limit, 128)
+    torch._dynamo.config.accumulated_cache_size_limit = max(
+        torch._dynamo.config.accumulated_cache_size_limit, 512)
+    net.transformer.blocks = torch.nn.ModuleList([
+        torch.compile(block, fullgraph=True, dynamic=True)
+        for block in net.transformer.blocks
+    ])
+    decoder = torch.compile(decoder, fullgraph=True, dynamic=False)
+    token_picker = torch.compile(token_picker, fullgraph=True, dynamic=False)
+
+
+@torch.inference_mode()
+def gpu_generate(x, l0=None):
+    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=a.precision == "bf16"):
+        _, latent = net.generate(l0, x, temperature=temp, top_k=top_k, top_p=top_p,
+                                use_kv_cache=a.kv_cache, cfg_scale=cfg, cfg_null_eos=EOS,
+                                return_latent=True)
+        return token_picker(decoder(latent))
+
+
+# Separate captures handle the real final-batch shape without dropping samples.
+generate_tokens = CUDAGraphRunner(gpu_generate) if a.cuda_graphs else gpu_generate
+
 
 def run(x, l0=None):
-    with torch.no_grad():
-        g = net.generate(l0, x, temperature=temp, top_k=top_k, top_p=top_p, cfg_scale=cfg, cfg_null_eos=EOS)
-        _, zl = tk.vqvae.vq.idx_to_zhats(g, return_zlevels=True)
-        ids = pick_tokens(tk.vqvae.decoder(zl[-1])).tolist()
-        RAW.extend(ids)
-        return [dec(r) for r in ids]
+    ids = generate_tokens(x, l0).tolist()
+    RAW.extend(ids)
+    return [dec(r) for r in ids]
 
 
+print(f"[inference] cfg={cfg} kv_cache={a.kv_cache} compile={a.compile} resize_matmul={a.resize_matmul} "
+      f"cuda_graphs={a.cuda_graphs} precision={a.precision}", flush=True)
 hyps, sample_seed = [], []
 if UNCOND:
     L0 = tk.vqvae.vq.levels[0]
@@ -168,6 +200,11 @@ else:
             print(f"  shard0 {s}/{len(idxs)}", flush=True)
     out = {"idxs": idxs, "hyps": hyps, "refs": [r if isinstance(r, str) else dec(r) for r in (refs[i] for i in idxs)]}
 
+out["generation"] = {"cfg_scale": cfg, "use_kv_cache": a.kv_cache,
+                     "compile": a.compile, "resize_matmul": a.resize_matmul,
+                     "cuda_graphs": a.cuda_graphs, "precision": a.precision,
+                     "graph_captures": len(generate_tokens.graphs) if a.cuda_graphs else 0,
+                     "graph_replays": generate_tokens.replay_count if a.cuda_graphs else 0}
 os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
 pickle.dump(out, open(a.out, "wb"))
 print(f"shard {a.shard}: {len(hyps)} -> {a.out}")

@@ -2,6 +2,7 @@ import argparse, os, subprocess, sys
 
 import torch
 from omegaconf import OmegaConf
+from utils.inference import add_speed_args, speed_cli_flags
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -14,6 +15,7 @@ def main():
     ap.add_argument("--out", default="", help="output directory (default eval/<task>)")
     ap.add_argument("--gpus", default="", help="comma-separated GPU ids (default: all visible)")
     ap.add_argument("--n", type=int, default=0, help="evaluate only the first n inputs")
+    add_speed_args(ap)
     args, passthrough = ap.parse_known_args()
 
     cfg = OmegaConf.load(args.config)
@@ -23,7 +25,7 @@ def main():
     out = args.out or os.path.join("eval", cfg.task)
     os.makedirs(out, exist_ok=True)
 
-    common = ["--config", args.config, "--checkpoint-dir", args.checkpoint_dir] + (["--data-dir", args.data_dir] if args.data_dir else []) + [
+    common = ["--config", args.config, "--checkpoint-dir", args.checkpoint_dir] + speed_cli_flags(args) + (["--data-dir", args.data_dir] if args.data_dir else []) + [
               "--nshards", str(len(gpus))] + (["--n", str(args.n)] if args.n else []) + passthrough
     procs = []
     for k, gpu in enumerate(gpus):

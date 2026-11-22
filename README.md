@@ -86,6 +86,8 @@ python evaluate.py --config config/eval/<dataset>.yaml --checkpoint-dir artifact
 
 This runs one generation shard per visible GPU, merges them, and prints ROUGE-1/2/L and generative perplexity for XSum; cased and lowercased sacreBLEU, chrF and length ratio for WMT14; solved, cell and valid-grid rates for Sudoku; and generative perplexity under GPT-2 large with unigram entropy, over 5 seeds of 256 unconditional samples, for TinyStories, OpenWebText and LM1B, the latter under the FLM scoring protocol. Add `--cfg <scale>` for classifier-free guidance on XSum and WMT14; the guided WMT14 row uses `--cfg 1.0`.
 
+Inference uses BF16 by default; add `--precision fp32` to use FP32.
+
 ## Repository layout
 
 - `evaluate.py`: evaluation entry point

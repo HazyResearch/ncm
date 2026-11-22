@@ -503,13 +503,18 @@ class NextConceptTransformer(Transformer):
             return logits.argmax(dim=-1)
         logits_flat = logits.reshape(-1, logits.shape[-1]) / temperature
         if top_k > 0:
-            kth = torch.topk(logits_flat, top_k, dim=-1).values[:, -1, None]
+            # Only the cutoff is needed; the top-k values need not be sorted.
+            top_values = torch.topk(logits_flat, top_k, dim=-1, sorted=False).values
+            kth = top_values.amin(dim=-1, keepdim=True)
             logits_flat = logits_flat.masked_fill(logits_flat < kth, -torch.inf)
-        sorted_logits, sorted_idx = torch.sort(logits_flat, dim=-1, descending=True)
-        cumprobs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-        remove = cumprobs - F.softmax(sorted_logits, dim=-1) > top_p
-        sorted_logits = sorted_logits.masked_fill(remove, -torch.inf)
-        logits_flat = torch.zeros_like(logits_flat).scatter_(-1, sorted_idx, sorted_logits)
+        # Unrestricted ancestral sampling (top_p=1) needs no nucleus sort.
+        if top_p < 1.0:
+            sorted_logits, sorted_idx = torch.sort(logits_flat, dim=-1, descending=True)
+            sorted_probs = F.softmax(sorted_logits, dim=-1)
+            cumprobs = torch.cumsum(sorted_probs, dim=-1)
+            remove = cumprobs - sorted_probs > top_p
+            sorted_logits = sorted_logits.masked_fill(remove, -torch.inf)
+            logits_flat = torch.zeros_like(logits_flat).scatter_(-1, sorted_idx, sorted_logits)
         return torch.multinomial(F.softmax(logits_flat, dim=-1), num_samples=1).view(logits.shape[:-1])
 
     def _decode_level_logits(self, x, prefix_emb, level_idx, pad_bias=None, hidx=None):
@@ -533,11 +538,13 @@ class NextConceptTransformer(Transformer):
 
     @torch.no_grad()
     def generate(self, idx, prefix_tokens, temperature=1.0, top_k=50, top_p=0.9,
-                 use_kv_cache=True, cfg_scale=0.0, cfg_null_eos=50256):
+                 use_kv_cache=True, cfg_scale=0.0, cfg_null_eos=50256,
+                 return_latent=False):
         """Generate with request-local prefix caching by default.
 
         Pass use_kv_cache=False only for an uncached reference computation.
         No cache survives this call or is shared between independent requests.
+        return_latent=True also returns the accumulated final reconstruction.
         """
 
         dev = prefix_tokens.device
@@ -591,10 +598,8 @@ class NextConceptTransformer(Transformer):
         if self.prefix_pad_id is not None:
             _pm = (prefix_tokens[:, :P] == self.prefix_pad_id)
             _pbias = torch.zeros(_pm.shape[0], 1, 1, P, device=dev)
-            _pbias[:, :, :, :P] = torch.where(
-                _pm[:, None, None, :],
-                torch.tensor(float('-inf'), device=dev),
-                torch.tensor(0.0, device=dev))
+            # Avoid host scalar transfers during CUDA graph capture.
+            _pbias.masked_fill_(_pm[:, None, None, :], float('-inf'))
 
         if idx is None and self.query_level0:
             l0 = self.levels[0]
@@ -720,7 +725,14 @@ class NextConceptTransformer(Transformer):
             generated_idx.append(idx_next)
             level_acum += self.levels[level_idx+1]
         out = torch.cat(generated_idx, dim=1)
+        if return_latent:
+            # Earlier levels are already in z_hat; add the final level once.
+            last = len(self.levels) - 1
+            z_hat, _ = vq.get_next_autoregressive_input(
+                last, z_hat, vq.embeddings[last](idx_next))
         if self._cfg is not None:
             out = out[:self._cfg["B"]]
+            if return_latent:
+                z_hat = z_hat[:self._cfg["B"]]
         self._cfg = None
-        return out
+        return (out, z_hat) if return_latent else out
