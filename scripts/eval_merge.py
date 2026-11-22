@@ -37,10 +37,12 @@ def rouge():
     from rouge_score import rouge_scorer
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from evaluation.gen_ppl import generation_perplexity
+    from utils.misc import default_device
 
+    dev = default_device()
     sc = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL"], use_stemmer=True)
     g2 = AutoTokenizer.from_pretrained("gpt2")
-    lm = AutoModelForCausalLM.from_pretrained("gpt2").cuda().eval()
+    lm = AutoModelForCausalLM.from_pretrained("gpt2").to(dev).eval()
 
     R = {k: [] for k in ("rouge1", "rouge2", "rougeL")}
     for h, r in zip(hyps, refs):
@@ -48,7 +50,7 @@ def rouge():
         for k in R:
             R[k].append(v[k].fmeasure)
     with torch.no_grad():
-        gp = generation_perplexity(lm, g2, [""] * len(hyps), hyps, device="cuda",
+        gp = generation_perplexity(lm, g2, [""] * len(hyps), hyps, device=dev,
                                    score_only_generated=True, batch_size=32).mean_ppl
     print(f"{'R-1':>7} {'R-2':>7} {'R-L':>7} {'genPPL':>8} {'words':>7}")
     print(f"{100 * np.mean(R['rouge1']):7.2f} {100 * np.mean(R['rouge2']):7.2f} {100 * np.mean(R['rougeL']):7.2f} "
@@ -82,10 +84,12 @@ def genppl():
     from collections import Counter
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from evaluation.gen_ppl import generation_perplexity
+    from utils.misc import default_device
 
+    dev = default_device()
     ref = str(CFG.eval.ref_model)
     rtok = AutoTokenizer.from_pretrained(ref)
-    rlm = AutoModelForCausalLM.from_pretrained(ref).cuda().eval()
+    rlm = AutoModelForCausalLM.from_pretrained(ref).to(dev).eval()
 
     def entropy(ids):
         c, m = Counter(ids), len(ids)
@@ -96,7 +100,7 @@ def genppl():
         sel = [k for k, s_ in enumerate(seeds) if s_ == seed]
         gen = [hyps_by_part[k] for k in sel]
         with torch.no_grad():
-            ppl = generation_perplexity(rlm, rtok, [""] * len(gen), gen, batch_size=32).mean_ppl
+            ppl = generation_perplexity(rlm, rtok, [""] * len(gen), gen, device=dev, batch_size=32).mean_ppl
         ent = float(np.mean([entropy(toks[k]) for k in sel if toks[k]]))
         per.append((seed, ppl, ent))
     print(f"{'seed':>5} {'genPPL':>8} {'entropy':>8}")
@@ -112,17 +116,19 @@ def genppl_flm():
     import torch
     import torch.nn.functional as F
     from transformers import AutoModelForCausalLM, AutoTokenizer
+    from utils.misc import default_device
 
+    dev = default_device()
     gen_tok = AutoTokenizer.from_pretrained(str(CFG.tokenizer.pre_tokenizer.model_id))
     ref = str(CFG.eval.ref_model)
     rtok = AutoTokenizer.from_pretrained(ref)
     if rtok.pad_token is None:
         rtok.pad_token = rtok.eos_token
-    rlm = AutoModelForCausalLM.from_pretrained(ref).cuda().eval()
+    rlm = AutoModelForCausalLM.from_pretrained(ref).to(dev).eval()
 
     def corpus_ppl(texts):
         enc = rtok(texts, return_tensors="pt", return_token_type_ids=False, truncation=True, padding=True, max_length=128)
-        ids, attn = enc["input_ids"].cuda(), enc["attention_mask"].cuda()
+        ids, attn = enc["input_ids"].to(dev), enc["attention_mask"].to(dev)
         nll_sum = tok_sum = 0.0
         with torch.no_grad():
             for i in range(0, ids.shape[0], 16):

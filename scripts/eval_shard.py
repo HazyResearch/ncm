@@ -5,6 +5,7 @@ sys.path.insert(0, os.environ.get("NCM_ROOT", os.getcwd()))
 from models.next_concept import NextConceptTransformer
 from tokenization.vqvae_tokenizer import VQVAETokenizer
 from transformers import AutoTokenizer
+from utils.misc import default_device, wide_float
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--config", required=True)
@@ -27,6 +28,8 @@ ap.add_argument("--out", required=True)
 a = ap.parse_args()
 
 CFG = OmegaConf.load(a.config)
+DEV = default_device()
+F64 = wide_float(DEV)
 G = CFG.generation
 ck = a.checkpoint_dir or os.path.join("artifacts", CFG.task)
 dd = a.data_dir or os.path.join(os.environ.get("NCM_DATA_ROOT", "data"), CFG.task)
@@ -47,8 +50,8 @@ for key, name in (('vocab_file_path', 'bpe_vocab'), ('merges_file_path', 'bpe_me
     if CFG.checkpoints.get(name):
         CFG.tokenizer.pre_tokenizer[key] = os.path.join(ck, CFG.checkpoints[name])
 tk = VQVAETokenizer.from_config(CFG.tokenizer)
-tk.vqvae = tk.vqvae.cuda().eval()
-net = NextConceptTransformer(vqvae_local=tk.vqvae, config=CFG.model).cuda()
+tk.vqvae = tk.vqvae.to(DEV).eval()
+net = NextConceptTransformer(vqvae_local=tk.vqvae, config=CFG.model).to(DEV)
 sd = torch.load(os.path.join(ck, CFG.checkpoints.generator), map_location="cpu", weights_only=False)
 net.load_state_dict(sd["model"], strict=True)
 net.eval()
@@ -59,11 +62,11 @@ EOS, PAD = tk.pre_tokenizer.eos_token_id, tk.pre_tokenizer.pad_token_id
 def load_allowance(spec):
     if ":" in spec:
         path, ref = spec.split(":", 1)
-        obj = torch.load(os.path.join(ck, path), map_location="cuda", weights_only=False)
+        obj = torch.load(os.path.join(ck, path), map_location="cpu", weights_only=False)
         for k in ref.split("."):
             obj = obj[k]
-        return obj.double()
-    return torch.load(os.path.join(ck, spec), map_location="cuda").double()
+        return obj.to(DEV, F64)
+    return torch.load(os.path.join(ck, spec), map_location="cpu").to(DEV, F64)
 
 
 ALLOW = load_allowance(str(G.frequency_allowance)) if G.get("frequency_allowance") else None
@@ -100,12 +103,12 @@ def pick_tokens(logits):
     if freq <= 0 and not ADJ:
         return logits.argmax(-1)
     B, T, V = logits.shape
-    lg = logits.double()
+    lg = logits.to(F64)
     allow = (ALLOW[:V] * T)[None, :] if ALLOW is not None else None
     al = ADJ[0] if ADJ else 0.0
     aw = int(ADJ[1]) if ADJ and len(ADJ) > 1 else 1
     ad = ADJ[2] if ADJ and len(ADJ) > 2 else 1.0
-    cnt = torch.zeros(B, V, dtype=torch.float64, device=lg.device)
+    cnt = torch.zeros(B, V, dtype=F64, device=lg.device)
     out = torch.empty(B, T, dtype=torch.long, device=lg.device)
     hist = []
     for t in range(T):
@@ -116,11 +119,11 @@ def pick_tokens(logits):
             if mu > 0 and allow is not None:
                 step += mu * ((T - t) / T) * (allow - cnt).clamp_min(0.0)
         for j, h in enumerate(reversed(hist[-aw:])):
-            step.scatter_add_(1, h[:, None], torch.full((B, 1), -al * ad ** j, dtype=torch.float64, device=lg.device))
+            step.scatter_add_(1, h[:, None], torch.full((B, 1), -al * ad ** j, dtype=F64, device=lg.device))
         p = step.argmax(-1)
         out[:, t] = p
         hist.append(p)
-        cnt.scatter_add_(1, p[:, None], torch.ones(B, 1, dtype=torch.float64, device=lg.device))
+        cnt.scatter_add_(1, p[:, None], torch.ones(B, 1, dtype=F64, device=lg.device))
     return out
 
 
@@ -153,8 +156,8 @@ if UNCOND:
         torch.manual_seed(seed)
         for s in range(0, n, bs):
             B = min(bs, n - s)
-            l0 = torch.multinomial(L0_P.cpu(), B * L0, replacement=True).view(B, L0).cuda() if L0_P is not None else None
-            hyps += run(torch.full((B, 1), EOS, device="cuda"), l0)
+            l0 = torch.multinomial(L0_P.cpu(), B * L0, replacement=True).view(B, L0).to(DEV) if L0_P is not None else None
+            hyps += run(torch.full((B, 1), EOS, device=DEV), l0)
             sample_seed += [seed] * B
         print(f"  shard{a.shard} seed {seed}: {n} samples", flush=True)
     idxs = list(range(len(hyps)))
@@ -163,7 +166,7 @@ if UNCOND:
 else:
     for s in range(0, len(idxs), bs):
         batch = idxs[s:s + bs]
-        hyps += run(torch.tensor([prefix(items[i]) for i in batch], device="cuda"))
+        hyps += run(torch.tensor([prefix(items[i]) for i in batch], device=DEV))
         if a.shard == 0 and (s // bs) % 10 == 0:
             print(f"  shard0 {s}/{len(idxs)}", flush=True)
     out = {"idxs": idxs, "hyps": hyps, "refs": [r if isinstance(r, str) else dec(r) for r in (refs[i] for i in idxs)]}

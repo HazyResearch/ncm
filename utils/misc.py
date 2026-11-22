@@ -1,4 +1,23 @@
 import math
+import os
+
+import torch
+
+
+def default_device():
+    """NCM_DEVICE if set, else CUDA, else Apple-silicon MPS, else CPU."""
+    if os.environ.get("NCM_DEVICE"):
+        return os.environ["NCM_DEVICE"]
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def wide_float(device):
+    """float64 where supported; MPS has no float64, so fall back to float32 there."""
+    return torch.float32 if str(device).startswith("mps") else torch.float64
 
 
 def count_params(model, exclude_params=[]):
