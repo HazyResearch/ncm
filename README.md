@@ -88,9 +88,18 @@ This runs one generation shard per visible GPU, merges them, and prints ROUGE-1/
 
 Inference uses BF16 by default; add `--precision fp32` to use FP32.
 
+## Benchmarking
+
+```bash
+python benchmark.py --config config/benchmark/<task>.yaml
+```
+
+Use the same task names as in `config/eval/`. Defaults are 1,024 samples, batch size 16, BF16, and three timed repetitions after warmup. Timing includes input preparation through decoded text; model loading, compilation and warmup are excluded. Add `--precision fp32` to use FP32, or set `benchmark.samples: null` to time a full conditional test split. Results and settings are saved under `outputs/benchmark/`.
+
 ## Repository layout
 
 - `evaluate.py`: evaluation entry point
+- `benchmark.py`, `config/benchmark/`: generation speed benchmarks
 - `scripts/`: per-GPU generation shard and the merge that scores it
 - `config/eval/`: one config per released checkpoint, identical to the `config.yaml` shipped with it
 - `models/`, `tokenization/`: generator and tokenizer implementations

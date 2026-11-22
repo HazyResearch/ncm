@@ -1,0 +1,19 @@
+# Model and sampling settings are shared with the released evaluation config.
+eval_config: ../eval/xsum.yaml
+checkpoint_dir: artifacts/xsum
+data_dir: data/xsum
+
+benchmark:
+  samples: 1024  # Set null to time the entire conditional test split.
+  batch_size: 16
+  warmup: 25  # Requests per actual batch shape, including the final partial batch.
+  repeats: 3
+  seed: 55
+  cpu_threads: 4
+
+inference:
+  precision: bf16
+  compile: true
+  resize_matmul: true
+  cuda_graphs: true
+  kv_cache: true

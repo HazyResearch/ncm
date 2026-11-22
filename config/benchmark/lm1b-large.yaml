@@ -1,0 +1,19 @@
+# Model and sampling settings are shared with the released evaluation config.
+eval_config: ../eval/lm1b-large.yaml
+checkpoint_dir: artifacts/lm1b/large
+data_dir: data/lm1b
+
+benchmark:
+  samples: 1024
+  batch_size: 16
+  warmup: 25  # Requests per actual batch shape, including the final partial batch.
+  repeats: 3
+  seed: 55
+  cpu_threads: 4
+
+inference:
+  precision: bf16
+  compile: true
+  resize_matmul: true
+  cuda_graphs: true
+  kv_cache: true

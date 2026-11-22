@@ -27,7 +27,16 @@ ap.add_argument("--mu", type=float, default=None)
 ap.add_argument("--adj", default=None)
 ap.add_argument("--l0", default="", help="unigram (default), active, uniform, or smooth:<eps> (mix eps of uniform into the unigram)")
 ap.add_argument("--out", required=True)
+ap.add_argument("--benchmark-config", help=argparse.SUPPRESS)
 a = ap.parse_args()
+
+if a.benchmark_config:
+    benchmark_cfg = OmegaConf.load(a.benchmark_config)
+    torch.set_num_threads(int(benchmark_cfg.benchmark.cpu_threads))
+    torch.set_num_interop_threads(1)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cudnn.benchmark = False
 
 CFG = OmegaConf.load(a.config)
 G = CFG.generation
@@ -87,9 +96,11 @@ if UNCOND:
     n = a.n or int(CFG.eval.n_samples)
     items, refs, idxs, src_tok = [], [], [], None
 else:
-    items = pickle.load(open(os.path.join(dd, CFG.data[split]), "rb"))[:n]
-    refs = pickle.load(open(os.path.join(dd, CFG.data[f"{split}_refs"]), "rb"))[:n]
+    items = pickle.load(open(os.path.join(dd, CFG.data[split]), "rb"))
+    refs = pickle.load(open(os.path.join(dd, CFG.data[f"{split}_refs"]), "rb"))
     assert len(items) == len(refs), f"{len(items)} inputs vs {len(refs)} references"
+    if not a.benchmark_config:
+        items, refs = items[:n], refs[:n]
     idxs = list(range(a.shard, len(items), a.nshards))
     src_tok = AutoTokenizer.from_pretrained(str(CFG.tokenizer.pre_tokenizer.model_id)) if isinstance(items[0], str) else None
 
@@ -127,7 +138,9 @@ def pick_tokens(logits):
     return out
 
 
-CUT_AT_EOS = bool(G.get("cut_at_eos", True))
+# LM1B's FLM protocol decodes the full grid: its leading [CLS] is also the
+# configured EOS id, so stopping at the first occurrence would erase the text.
+CUT_AT_EOS = bool(G.get("cut_at_eos", str(CFG.eval.metric) != "genppl_flm"))
 
 
 def dec(ids):
@@ -174,6 +187,12 @@ def run(x, l0=None):
     ids = generate_tokens(x, l0).tolist()
     RAW.extend(ids)
     return [dec(r) for r in ids]
+
+
+if a.benchmark_config:
+    from utils.benchmarking import benchmark_inference
+    benchmark_inference(globals())
+    sys.exit(0)
 
 
 print(f"[inference] cfg={cfg} kv_cache={a.kv_cache} compile={a.compile} resize_matmul={a.resize_matmul} "
