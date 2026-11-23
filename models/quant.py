@@ -242,6 +242,7 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
         learned_l1_cascade_norm=False,
         learned_l1_cascade_norm_final=False,
         restart_threshold=0.0,
+        restart_max_steps=0,
         ema_scale_by_world_size=False,
         kmeans_init=False,
         kmeans_iters=10,
@@ -274,6 +275,7 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
         self.learned_l1_cascade_norm = bool(learned_l1_cascade_norm)
         self.learned_l1_cascade_norm_final = bool(learned_l1_cascade_norm_final)
         self.restart_threshold = float(restart_threshold)
+        self.restart_max_steps = int(restart_max_steps or 0)
         self.kmeans_init = bool(kmeans_init)
         self.kmeans_iters = int(kmeans_iters)
         self._km_buf = [[] for _ in range(len(vqvae_vocab_size))] if self.kmeans_init else None
@@ -299,7 +301,7 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
             emb.weight.data.normal_()
             emb.weight.requires_grad_(False)
         for i, vs in enumerate(self.vqvae_vocab_sizes):
-            self.register_buffer(f'ema_cluster_size_{i}', torch.zeros(vs))
+            self.register_buffer(f'ema_cluster_size_{i}', torch.ones(vs))
             self.register_buffer(f'ema_w_{i}', self.embeddings[i].weight.data.clone())
             self.register_buffer(f'codebook_hit_{i}', torch.zeros(vs, dtype=torch.long))
 
@@ -442,7 +444,7 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
         src = torch.randint(0, flat_input.shape[0], (n_dead,), device=flat_input.device)
         new_vecs = flat_input[src].to(emb_i.weight.dtype)
         emb_i.weight.data[dead] = new_vecs
-        ema_w[dead] = new_vecs
+        ema_w[dead] = new_vecs * self.restart_threshold
         ema_cs[dead] = self.restart_threshold
 
     def forward(self, z):
@@ -496,7 +498,9 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
                 smoothed = (ema_cs.data + self.epsilon) / (n + vs_i * self.epsilon) * n
                 ema_w.data.mul_(decay).add_(dw, alpha=1 - decay)
                 emb_i.weight.data.copy_(ema_w.data / smoothed.unsqueeze(1))
-                if self.restart_threshold > 0:
+                if self.restart_threshold > 0 and (
+                    self.restart_max_steps <= 0 or int(self._fd_step.item()) <= self.restart_max_steps
+                ):
                     self._restart_dead_codes(flat_input.detach(), ema_cs.data, ema_w.data, emb_i)
 
             q_BLC = emb_i(indices)
