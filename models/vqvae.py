@@ -113,7 +113,7 @@ class VQVAE(nn.Module):
     @torch.no_grad()
     def reconstruct(self, x):
         z = self._encode_pre_quant(x)
-        z_q, _, _ = self.vq(z)
+        z_q, *_ = self.vq(z)
         x_recon = self.decoder(z_q)
         return x_recon
     
@@ -124,10 +124,17 @@ class VQVAE(nn.Module):
         return x, idx[:, self.vq.levels[0]:]
     
     @torch.no_grad()
-    def reconstruct_multiscales(self, idx_pre_tokenized: torch.Tensor):
+    def reconstruct_multiscales(self, idx_pre_tokenized: torch.Tensor, *, full_resolution=False):
+        """Decode each cumulative latent at native or final sequence resolution.
+
+        Native resolution is retained by default for existing visualizations.
+        Use full_resolution=True to compare the same text positions at each level.
+        """
         B, _ = idx_pre_tokenized.shape
         z = self._encode_pre_quant(idx_pre_tokenized)
-        _, multiscale_zqs = self.vq.z_to_idx(z, return_zlevels=True)
+        _, multiscale_zqs = self.vq.z_to_idx(
+            z, return_zhats=full_resolution, return_zlevels=not full_resolution,
+        )
         reconstructions = []
         for z_q in multiscale_zqs:
             logits = self.decoder(z_q)
