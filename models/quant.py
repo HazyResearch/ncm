@@ -648,7 +648,8 @@ class MultiscaleResidualVectorQuantizer(VectorQuantizerBaseClass):
             else:
                 z_q_level = emb_at_level
             z_q_level = self._apply_quant_resi(z_q_level, level_idx)
-            z_hat.add_(z_q_level)
+            # Keep each saved prefix independent of later accumulation steps.
+            z_hat = z_hat + z_q_level
             z_hats.append(z_hat)
             if return_zlevels:
                 z_levels.append(

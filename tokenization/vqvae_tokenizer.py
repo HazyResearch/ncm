@@ -15,7 +15,7 @@ class VQVAETokenizer(Tokenizer):
         Tokenizer = hydra.utils.get_class(tokenizers[config.pre_tokenizer.name])
         pre_tokenizer = Tokenizer.from_config(config.pre_tokenizer)
         vqvae = VQVAE(**config.vqvae)
-        vqvae.load_state_dict(torch.load(config.vqvae.checkpoint_path, weights_only=False, map_location='cpu')['model'], strict=True)
+        vqvae.load_state_dict(torch.load(config.vqvae.checkpoint_path, weights_only=True, map_location='cpu')['model'], strict=True)
         return VQVAETokenizer(pre_tokenizer, vqvae)
     
     def _adjust_length(self, ids: list[int]) -> list[list[int]]:

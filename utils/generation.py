@@ -61,13 +61,13 @@ class Generator:
         codec = self.tokenizer.vqvae.cuda().eval()
         self.model = NextConceptTransformer(vqvae_local=codec, config=config.model).cuda().eval()
         checkpoint = torch.load(self.checkpoint_dir / config.checkpoints.generator,
-                                map_location='cpu', weights_only=False)
+                                map_location='cpu', weights_only=True)
         self.model.load_state_dict(checkpoint['model'], strict=True)
 
         def tensor(spec):
             path, _, reference = str(spec).partition(':')
             value = checkpoint if path == config.checkpoints.generator else torch.load(
-                self.checkpoint_dir / path, map_location='cpu', weights_only=False)
+                self.checkpoint_dir / path, map_location='cpu', weights_only=True)
             for key in reference.split('.') if reference else []:
                 value = value[key]
             return value.cuda().double()
