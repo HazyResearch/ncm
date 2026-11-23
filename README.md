@@ -96,6 +96,27 @@ python benchmark.py --config config/benchmark/<task>.yaml
 
 Use the same task names as in `config/eval/`. Defaults are 1,024 samples, batch size 16, BF16, and three timed repetitions after warmup. Timing includes input preparation through decoded text; model loading, compilation and warmup are excluded. Add `--precision fp32` to use FP32, or set `benchmark.samples: null` to time a full conditional test split. Results and settings are saved under `outputs/benchmark/`.
 
+Measured on one NVIDIA H100 80GB with BF16, PyTorch 2.11, CUDA 12.8, and the default inference optimizations. Results are median total wall-clock times after 25 warmup requests; `B` is batch size and `N` is the total number of generated samples.
+
+<table>
+  <thead>
+    <tr><th>Task</th><th>Model</th><th>B=1, N=1<br>(ms)</th><th>B=16, N=16<br>(ms)</th><th>B=32, N=32<br>(ms)</th><th>B=16, N=1024<br>(s)</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="1"><b>XSum</b></td><td>&ndash;</td><td align="right">11.89</td><td align="right">23.77</td><td align="right">35.90</td><td align="right">1.504</td></tr>
+    <tr><td rowspan="1"><b>WMT14 De&ndash;En</b></td><td>&ndash;</td><td align="right">12.82</td><td align="right">20.58</td><td align="right">28.37</td><td align="right">1.271</td></tr>
+    <tr><td rowspan="3"><b>Sudoku</b></td><td>easy</td><td align="right">7.21</td><td align="right">9.17</td><td align="right">11.93</td><td align="right">0.570</td></tr>
+    <tr><td>medium</td><td align="right">7.21</td><td align="right">9.19</td><td align="right">11.85</td><td align="right">0.568</td></tr>
+    <tr><td>hard</td><td align="right">7.24</td><td align="right">9.11</td><td align="right">11.77</td><td align="right">0.527</td></tr>
+    <tr><td rowspan="3"><b>LM1B</b></td><td>small</td><td align="right">14.35</td><td align="right">24.44</td><td align="right">34.41</td><td align="right">1.537</td></tr>
+    <tr><td>medium</td><td align="right">28.16</td><td align="right">46.92</td><td align="right">70.92</td><td align="right">2.836</td></tr>
+    <tr><td>large</td><td align="right">47.33</td><td align="right">85.17</td><td align="right">128.63</td><td align="right">5.342</td></tr>
+    <tr><td rowspan="1"><b>TinyStories</b></td><td>&ndash;</td><td align="right">13.04</td><td align="right">20.88</td><td align="right">29.75</td><td align="right">1.311</td></tr>
+  </tbody>
+</table>
+
+Reproduce each column with the command above, adding `--batch-size B --samples N --repeats R`: use `R=30` for the first three columns and `R=3` for the last.
+
 ## Repository layout
 
 - `evaluate.py`: evaluation entry point
