@@ -2,10 +2,8 @@ import argparse, os, pickle, sys
 import torch
 from omegaconf import OmegaConf
 sys.path.insert(0, os.environ.get("NCM_ROOT", os.getcwd()))
-from models.next_concept import NextConceptTransformer
-from tokenization.vqvae_tokenizer import VQVAETokenizer
+from utils.generation import Generator
 from utils.inference import add_speed_args
-from utils.fast_generation import CUDAGraphRunner, enable_resize_matmuls, fuse_token_picker
 from transformers import AutoTokenizer
 
 ap = argparse.ArgumentParser()
@@ -54,33 +52,16 @@ split = a.split or CFG.eval.get("split", "test")
 n = a.n or int(CFG.eval.get("n_docs", 0))
 bs = a.bs or int(CFG.eval.batch_size)
 
-CFG.tokenizer.vqvae.checkpoint_path = os.path.join(ck, CFG.checkpoints.tokenizer)
-for key, name in (('vocab_file_path', 'bpe_vocab'), ('merges_file_path', 'bpe_merges')):
-    if CFG.checkpoints.get(name):
-        CFG.tokenizer.pre_tokenizer[key] = os.path.join(ck, CFG.checkpoints[name])
-tk = VQVAETokenizer.from_config(CFG.tokenizer)
-tk.vqvae = tk.vqvae.cuda().eval()
-net = NextConceptTransformer(vqvae_local=tk.vqvae, config=CFG.model).cuda()
-sd = torch.load(os.path.join(ck, CFG.checkpoints.generator), map_location="cpu", weights_only=False)
-net.load_state_dict(sd["model"], strict=True)
-net.eval()
+G.update(temperature=temp, top_k=top_k, top_p=top_p, cfg_scale=cfg,
+         frequency_penalty=freq, frequency_deficit=mu, adjacency_penalty=adj)
+runtime = Generator(CFG, ck, a)
+tk, net = runtime.tokenizer, runtime.model
 P = int(CFG.model.prefix_len)
-EOS, PAD = tk.pre_tokenizer.eos_token_id, tk.pre_tokenizer.pad_token_id
+EOS, PAD = runtime.eos, runtime.pad
+ALLOW = runtime.allowance
 
-
-def load_allowance(spec):
-    if ":" in spec:
-        path, ref = spec.split(":", 1)
-        obj = torch.load(os.path.join(ck, path), map_location="cuda", weights_only=False)
-        for k in ref.split("."):
-            obj = obj[k]
-        return obj.double()
-    return torch.load(os.path.join(ck, spec), map_location="cuda").double()
-
-
-ALLOW = load_allowance(str(G.frequency_allowance)) if G.get("frequency_allowance") else None
 L0_MODE = a.l0 or "unigram"
-L0_P = load_allowance(str(G.level0_unigram)).float() if G.get("level0_unigram") else None
+L0_P = runtime.initial_probabilities
 if L0_P is not None and L0_MODE == "active":
     L0_P = (L0_P > 0).float() / (L0_P > 0).sum()
 elif L0_P is not None and L0_MODE == "uniform":
@@ -110,79 +91,10 @@ def prefix(item):
     return (ids[:P] + [PAD] * P)[:P]
 
 
-def pick_tokens(logits):
-    if freq <= 0 and not ADJ:
-        return logits.argmax(-1)
-    B, T, V = logits.shape
-    lg = logits.double()
-    allow = (ALLOW[:V] * T)[None, :] if ALLOW is not None else None
-    al = ADJ[0] if ADJ else 0.0
-    aw = int(ADJ[1]) if ADJ and len(ADJ) > 1 else 1
-    ad = ADJ[2] if ADJ and len(ADJ) > 2 else 1.0
-    cnt = torch.zeros(B, V, dtype=torch.float64, device=lg.device)
-    out = torch.empty(B, T, dtype=torch.long, device=lg.device)
-    hist = []
-    for t in range(T):
-        step = lg[:, t, :].clone()
-        if freq > 0:
-            excess = (cnt - allow).clamp_min(0.0) if allow is not None else cnt
-            step -= freq * excess
-            if mu > 0 and allow is not None:
-                step += mu * ((T - t) / T) * (allow - cnt).clamp_min(0.0)
-        for j, h in enumerate(reversed(hist[-aw:])):
-            step.scatter_add_(1, h[:, None], torch.full((B, 1), -al * ad ** j, dtype=torch.float64, device=lg.device))
-        p = step.argmax(-1)
-        out[:, t] = p
-        hist.append(p)
-        cnt.scatter_add_(1, p[:, None], torch.ones(B, 1, dtype=torch.float64, device=lg.device))
-    return out
-
-
-# LM1B's FLM protocol decodes the full grid: its leading [CLS] is also the
-# configured EOS id, so stopping at the first occurrence would erase the text.
-CUT_AT_EOS = bool(G.get("cut_at_eos", str(CFG.eval.metric) != "genppl_flm"))
-
-
-def dec(ids):
-    ids = list(ids)
-    if CUT_AT_EOS and EOS in ids:
-        ids = ids[:ids.index(EOS)]
-    return tk.pre_tokenizer.decode([t for t in ids if t not in (EOS, PAD)], skip_special_tokens=True)
-
-
+CUT_AT_EOS = runtime.cut_at_eos
+dec = runtime.decode
+generate_tokens = runtime.generate_tokens
 RAW = []
-
-if a.resize_matmul:
-    enable_resize_matmuls(tk.vqvae.vq)
-
-decoder, token_picker = tk.vqvae.decoder, pick_tokens
-if a.compile:
-    # Hierarchy lengths, prefix-cache modes and the final partial batch can
-    # require several compiled variants of the same transformer block.
-    torch._dynamo.config.cache_size_limit = max(torch._dynamo.config.cache_size_limit, 128)
-    torch._dynamo.config.accumulated_cache_size_limit = max(
-        torch._dynamo.config.accumulated_cache_size_limit, 512)
-    net.transformer.blocks = torch.nn.ModuleList([
-        torch.compile(block, fullgraph=True, dynamic=True)
-        for block in net.transformer.blocks
-    ])
-    decoder = torch.compile(decoder, fullgraph=True, dynamic=False)
-    token_picker = torch.compile(token_picker, fullgraph=True, dynamic=False)
-
-token_picker = fuse_token_picker(token_picker, freq, mu, ADJ, ALLOW)
-
-
-@torch.inference_mode()
-def gpu_generate(x, l0=None):
-    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=a.precision == "bf16"):
-        _, latent = net.generate(l0, x, temperature=temp, top_k=top_k, top_p=top_p,
-                                use_kv_cache=a.kv_cache, cfg_scale=cfg, cfg_null_eos=EOS,
-                                return_latent=True)
-        return token_picker(decoder(latent))
-
-
-# Separate captures handle the real final-batch shape without dropping samples.
-generate_tokens = CUDAGraphRunner(gpu_generate) if a.cuda_graphs else gpu_generate
 
 
 def run(x, l0=None):

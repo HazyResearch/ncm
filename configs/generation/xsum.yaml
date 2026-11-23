@@ -1,0 +1,12 @@
+# Reuse the released model configuration. No metrics are computed.
+model_config: ../../config/eval/xsum.yaml
+checkpoint_dir: artifacts/xsum
+data_dir: data/xsum
+split: test
+
+samples: 1
+batch_size: 1
+seed: 1
+
+generation:
+  cut_at_eos: true

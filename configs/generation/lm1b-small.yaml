@@ -1,0 +1,11 @@
+# Reuse the released model configuration. No metrics are computed.
+model_config: ../../config/eval/lm1b-small.yaml
+checkpoint_dir: artifacts/lm1b/small
+
+samples: 1
+batch_size: 1
+seed: 7
+
+generation:
+  # Packed sentences use [CLS] as a separator, including at position zero.
+  cut_at_eos: false

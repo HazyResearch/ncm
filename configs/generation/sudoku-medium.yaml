@@ -1,0 +1,12 @@
+# Reuse the released model configuration. No metrics are computed.
+model_config: ../../config/eval/sudoku-medium.yaml
+checkpoint_dir: artifacts/sudoku/medium
+data_dir: data/sudoku/medium
+split: test
+
+samples: 1
+batch_size: 1
+seed: 5
+
+generation:
+  cut_at_eos: true

@@ -1,0 +1,11 @@
+# Reuse the released model configuration. No metrics are computed.
+model_config: ../../config/eval/tinystories.yaml
+checkpoint_dir: artifacts/tinystories
+
+samples: 1
+batch_size: 1
+seed: 7
+
+generation:
+  cut_at_eos: true
+  temperature: 0.7

@@ -1,0 +1,12 @@
+# Reuse the released model configuration. No metrics are computed.
+model_config: ../../config/eval/wmt14.yaml
+checkpoint_dir: artifacts/wmt14
+data_dir: data/wmt14
+split: test
+
+samples: 1
+batch_size: 1
+seed: 37
+
+generation:
+  cut_at_eos: true

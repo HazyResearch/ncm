@@ -88,6 +88,17 @@ This runs one generation shard per visible GPU, merges them, and prints ROUGE-1/
 
 Inference uses BF16 by default; add `--precision fp32` to use FP32.
 
+## Generation
+
+View examples without computing metrics, using the checkpoints and data downloaded above:
+
+```bash
+python generate.py --config configs/generation/<task>.yaml
+python generate.py --config configs/generation/sudoku-hard.yaml --samples 1 --trajectory
+```
+
+Use the task names from `config/benchmark/`. Conditional examples show the prompt, generated answer and reference; Sudoku is rendered as a board. `--trajectory` shows each hierarchy prefix and is off by default. Override `--seed` or `--samples`, and add `--out samples.jsonl` to save the outputs. The default seeds select illustrative examples. LM1B displays the full packed sequence, including text after sentence separators.
+
 ## Benchmarking
 
 ```bash

@@ -1,0 +1,12 @@
+# Reuse the released model configuration. No metrics are computed.
+model_config: ../../config/eval/sudoku-hard.yaml
+checkpoint_dir: artifacts/sudoku/hard
+data_dir: data/sudoku/hard
+split: test
+
+samples: 1
+batch_size: 1
+seed: 7
+
+generation:
+  cut_at_eos: true
