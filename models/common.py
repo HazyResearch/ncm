@@ -13,7 +13,7 @@ except ImportError:
 def precompute_rope_cos_sin(positions, head_dim, base=10000):
     assert head_dim % 2 == 0, f"head_dim must be even for RoPE, got {head_dim}"
     half = head_dim // 2
-    inv_freq = 1.0 / (base ** (torch.arange(0, half, dtype=torch.float32) / half))
+    inv_freq = 1.0 / (base ** (torch.arange(0, half, dtype=torch.float32, device=positions.device) / half))
     freqs = positions.float()[:, None] * inv_freq[None, :]
     cos = torch.cat([freqs.cos(), freqs.cos()], dim=-1)
     sin = torch.cat([freqs.sin(), freqs.sin()], dim=-1)
