@@ -125,11 +125,11 @@ Results below use BF16, no guidance, and one H100 80GB. XSum/WMT14 use `--bs 16`
     <tr><td align="center">36.16</td><td align="center">13.88</td><td align="center">29.57</td></tr>
     <tr><td rowspan="2"><b>WMT14 De&ndash;En</b></td><td rowspan="2">&ndash;</td><th>BLEU, cased &uarr;</th><th>BLEU, lowercase &uarr;</th><td align="center">&ndash;</td></tr>
     <tr><td align="center">25.27</td><td align="center">26.20</td><td align="center">&ndash;</td></tr>
-    <tr><td rowspan="4"><b>Sudoku</b></td><td align="center">&ndash;</td><th>Solved (%) &uarr;</th><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
+    <tr><td rowspan="4"><b>Sudoku</b></td><td>&ndash;</td><th>Solved (%) &uarr;</th><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
     <tr><td>Easy</td><td align="center">99.55</td><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
     <tr><td>Medium</td><td align="center">97.75</td><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
     <tr><td>Hard</td><td align="center">90.05</td><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
-    <tr><td rowspan="4"><b>LM1B</b></td><td align="center">&ndash;</td><th>Gen. PPL &darr;</th><th>Entropy &uarr;</th><td align="center">&ndash;</td></tr>
+    <tr><td rowspan="4"><b>LM1B</b></td><td>&ndash;</td><th>Gen. PPL &darr;</th><th>Entropy &uarr;</th><td align="center">&ndash;</td></tr>
     <tr><td>Small</td><td align="center">94.76</td><td align="center">4.3158</td><td align="center">&ndash;</td></tr>
     <tr><td>Medium</td><td align="center">91.30</td><td align="center">4.3469</td><td align="center">&ndash;</td></tr>
     <tr><td>Large</td><td align="center">83.27</td><td align="center">4.3475</td><td align="center">&ndash;</td></tr>
