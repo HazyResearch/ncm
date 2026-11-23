@@ -8,6 +8,7 @@ from omegaconf import OmegaConf
 from models.next_concept import NextConceptTransformer
 from tokenization.vqvae_tokenizer import VQVAETokenizer
 from utils.fast_generation import CUDAGraphRunner, enable_resize_matmuls, fuse_token_picker
+from utils.inference import positive_temperature
 
 
 def make_token_picker(frequency, deficit, adjacency, allowance):
@@ -84,7 +85,9 @@ class Generator:
             temperature=float(settings.get('temperature', 1.0)),
             top_k=int(settings.get('top_k', 1)), top_p=float(settings.get('top_p', 0.0)),
             cfg_scale=float(settings.get('cfg_scale', 0.0)), cfg_null_eos=self.eos,
-            use_kv_cache=options.kv_cache, return_latent=True,
+            soft_decisions=bool(settings.get('soft_decisions', False)),
+            soft_temperature=positive_temperature(settings.get('soft_temperature', 1.0)),
+            use_kv_cache=options.kv_cache, return_latent=True, return_trajectory=trajectory,
         )
         frequency = float(settings.get('frequency_penalty', 0.0))
         deficit = float(settings.get('frequency_deficit', 0.0))
@@ -112,9 +115,10 @@ class Generator:
     @torch.inference_mode()
     def _generate(self, prefix, initial_codes=None):
         with self.autocast():
-            codes, latent = self.model.generate(initial_codes, prefix, **self.sampling)
-            tokens = self.pick_tokens(self.decoder(latent))
-        return (tokens, codes) if self.trajectory else tokens
+            _, latent = self.model.generate(initial_codes, prefix, **self.sampling)
+            final_latent = latent[:, -1] if self.trajectory else latent
+            tokens = self.pick_tokens(self.decoder(final_latent))
+        return (tokens, latent) if self.trajectory else tokens
 
     def decode(self, ids, *, cut_at_eos=None):
         ids = list(ids)
@@ -125,24 +129,14 @@ class Generator:
             [token for token in ids if token not in (self.eos, self.pad)], skip_special_tokens=True)
 
     @torch.inference_mode()
-    def decode_trajectory(self, codes, final_tokens):
-        """Decode successive sampled code prefixes at the full output resolution.
-
-        This replays codec accumulation only, without resampling or re-encoding.
-        Decode before the next in-place update to avoid aliasing the prefixes.
-        """
+    def decode_trajectory(self, latents, final_tokens):
+        """Decode the actual hard or soft latent saved after each level."""
         codec = self.tokenizer.vqvae
-        latent = torch.zeros(codes.shape[0], codec.vq.levels[-1], codec.embed_dim, device=codes.device)
-        offset = 0
         with self.autocast():
             for level, length in enumerate(codec.vq.levels):
                 if level == len(codec.vq.levels) - 1:
-                    # Show the actual output, avoiding a second BF16 decode of
-                    # near-tied logits outside the captured generation graph.
+                    # Reuse the captured output to avoid BF16 differences from a second decode.
                     yield level + 1, int(length), final_tokens.tolist()
                     break
-                embedding = codec.vq.embeddings[level](codes[:, offset:offset + length])
-                latent, _ = codec.vq.get_next_autoregressive_input(level, latent, embedding)
-                ids = self.pick_tokens(self.decoder(latent)).tolist()
+                ids = self.pick_tokens(self.decoder(latents[:, level])).tolist()
                 yield level + 1, int(length), ids
-                offset += length

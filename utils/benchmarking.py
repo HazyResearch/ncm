@@ -122,7 +122,8 @@ class InferenceBenchmark:
             "seed": self.seed,
             "repeats": int(self.settings.repeats),
             "precision": self.args.precision,
-            "soft_decisions": False,
+            "soft_decisions": bool(self.model_config.generation.get("soft_decisions", False)),
+            "soft_temperature": float(self.model_config.generation.get("soft_temperature", 1.0)),
             "vcycles": 0,
             "inference": OmegaConf.to_container(self.config.inference, resolve=True),
             "generation": OmegaConf.to_container(self.model_config.generation, resolve=True),
@@ -163,6 +164,7 @@ class InferenceBenchmark:
         files = [
             root / "benchmark.py", Path(__file__), root / "scripts/eval_shard.py",
             *sorted((root / "models").glob("*.py")), root / "utils/fast_generation.py",
+            root / "utils/generation.py", root / "utils/inference.py",
         ]
         metadata["source_sha256"] = {str(path.relative_to(root)): file_hash(path) for path in files}
         return metadata

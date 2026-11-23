@@ -102,10 +102,10 @@ def generate_samples(runtime, config, inputs):
         prefix = torch.tensor(prefixes, dtype=torch.long, device='cuda')
         generated = runtime.generate_tokens(prefix, initial)
         if runtime.trajectory:
-            tokens, codes = generated
+            tokens, latents = generated
             for record in records:
                 record['trajectory'] = []
-            for level, length, rows in runtime.decode_trajectory(codes, tokens):
+            for level, length, rows in runtime.decode_trajectory(latents, tokens):
                 for record, row in zip(records, rows):
                     record['trajectory'].append(dict(level=level, codes=length,
                                                      text=runtime.decode(row), raw_ids=row))

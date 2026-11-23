@@ -103,6 +103,8 @@ tokenizer:
       learned_l1_cascade_norm: true
       learned_l1_cascade_norm_final: true
 generation:
+  soft_decisions: true
+  soft_temperature: 1.0
   temperature: 1.0
   top_k: 1
   top_p: 0.0

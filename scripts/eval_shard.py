@@ -3,7 +3,7 @@ import torch
 from omegaconf import OmegaConf
 sys.path.insert(0, os.environ.get("NCM_ROOT", os.getcwd()))
 from utils.generation import Generator
-from utils.inference import add_speed_args
+from utils.inference import add_soft_decision_args, add_speed_args, positive_temperature
 from transformers import AutoTokenizer
 
 ap = argparse.ArgumentParser()
@@ -19,6 +19,7 @@ ap.add_argument("--temp", type=float, default=None)
 ap.add_argument("--top_k", type=int, default=None)
 ap.add_argument("--top_p", type=float, default=None)
 ap.add_argument("--cfg", type=float, default=None)
+add_soft_decision_args(ap)
 add_speed_args(ap)
 ap.add_argument("--freq", type=float, default=None)
 ap.add_argument("--mu", type=float, default=None)
@@ -45,6 +46,8 @@ temp = pick(a.temp, "temperature", float, 1.0)
 top_k = pick(a.top_k, "top_k", int, 1)
 top_p = pick(a.top_p, "top_p", float, 0.0)
 cfg = pick(a.cfg, "cfg_scale", float, 0.0)
+soft_decisions = pick(a.soft_decisions, "soft_decisions", bool, False)
+soft_temperature = positive_temperature(pick(a.soft_temperature, "soft_temperature", float, 1.0))
 freq = pick(a.freq, "frequency_penalty", float, 0.0)
 mu = pick(a.mu, "frequency_deficit", float, 0.0)
 adj = str(a.adj if a.adj is not None else G.get("adjacency_penalty", "") or "")
@@ -53,7 +56,8 @@ n = a.n or int(CFG.eval.get("n_docs", 0))
 bs = a.bs or int(CFG.eval.batch_size)
 
 G.update(temperature=temp, top_k=top_k, top_p=top_p, cfg_scale=cfg,
-         frequency_penalty=freq, frequency_deficit=mu, adjacency_penalty=adj)
+         frequency_penalty=freq, frequency_deficit=mu, adjacency_penalty=adj,
+         soft_decisions=soft_decisions, soft_temperature=soft_temperature)
 runtime = Generator(CFG, ck, a)
 tk, net = runtime.tokenizer, runtime.model
 P = int(CFG.model.prefix_len)
@@ -109,7 +113,8 @@ if a.benchmark_config:
     sys.exit(0)
 
 
-print(f"[inference] cfg={cfg} kv_cache={a.kv_cache} compile={a.compile} resize_matmul={a.resize_matmul} "
+print(f"[inference] soft_decisions={soft_decisions} soft_temperature={soft_temperature} "
+      f"cfg={cfg} kv_cache={a.kv_cache} compile={a.compile} resize_matmul={a.resize_matmul} "
       f"cuda_graphs={a.cuda_graphs} precision={a.precision}", flush=True)
 hyps, sample_seed = [], []
 if UNCOND:
@@ -133,7 +138,8 @@ else:
             print(f"  shard0 {s}/{len(idxs)}", flush=True)
     out = {"idxs": idxs, "hyps": hyps, "refs": [r if isinstance(r, str) else dec(r) for r in (refs[i] for i in idxs)]}
 
-out["generation"] = {"cfg_scale": cfg, "use_kv_cache": a.kv_cache,
+out["generation"] = {"soft_decisions": soft_decisions, "soft_temperature": soft_temperature,
+                     "cfg_scale": cfg, "use_kv_cache": a.kv_cache,
                      "compile": a.compile, "resize_matmul": a.resize_matmul,
                      "cuda_graphs": a.cuda_graphs, "precision": a.precision,
                      "graph_captures": len(generate_tokens.graphs) if a.cuda_graphs else 0,

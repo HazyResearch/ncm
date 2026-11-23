@@ -2,7 +2,7 @@ import argparse, os, subprocess, sys
 
 import torch
 from omegaconf import OmegaConf
-from utils.inference import add_speed_args, speed_cli_flags
+from utils.inference import add_soft_decision_args, add_speed_args, speed_cli_flags
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -15,6 +15,7 @@ def main():
     ap.add_argument("--out", default="", help="output directory (default eval/<task>)")
     ap.add_argument("--gpus", default="", help="comma-separated GPU ids (default: all visible)")
     ap.add_argument("--n", type=int, default=0, help="evaluate only the first n inputs")
+    add_soft_decision_args(ap)
     add_speed_args(ap)
     args, passthrough = ap.parse_known_args()
 
@@ -25,7 +26,12 @@ def main():
     out = args.out or os.path.join("eval", cfg.task)
     os.makedirs(out, exist_ok=True)
 
-    common = ["--config", args.config, "--checkpoint-dir", args.checkpoint_dir] + speed_cli_flags(args) + (["--data-dir", args.data_dir] if args.data_dir else []) + [
+    soft_flags = []
+    if args.soft_decisions is not None:
+        soft_flags.append("--soft-decisions" if args.soft_decisions else "--no-soft-decisions")
+    if args.soft_temperature is not None:
+        soft_flags += ["--soft-temperature", str(args.soft_temperature)]
+    common = ["--config", args.config, "--checkpoint-dir", args.checkpoint_dir] + soft_flags + speed_cli_flags(args) + (["--data-dir", args.data_dir] if args.data_dir else []) + [
               "--nshards", str(len(gpus))] + (["--n", str(args.n)] if args.n else []) + passthrough
     procs = []
     for k, gpu in enumerate(gpus):

@@ -44,12 +44,12 @@ Weights and tokenized datasets are hosted in the [NCM Hugging Face collection](h
   <tbody>
     <tr><td rowspan="1"><b>XSum</b></td><td>&ndash;</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/xsum/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/xsum/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/xsum/config.yaml">config.yaml</a></td><td rowspan="1"><a href="https://huggingface.co/datasets/hazyresearch/ncm-datasets/tree/main/xsum">test set</a></td></tr>
     <tr><td rowspan="1"><b>WMT14 De&ndash;En</b></td><td>&ndash;</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/wmt14/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/wmt14/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/wmt14/config.yaml">config.yaml</a></td><td rowspan="1"><a href="https://huggingface.co/datasets/hazyresearch/ncm-datasets/tree/main/wmt14">test set</a></td></tr>
-    <tr><td rowspan="3"><b>Sudoku</b></td><td>easy</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/easy/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/easy/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/easy/config.yaml">config.yaml</a></td><td rowspan="3"><a href="https://huggingface.co/datasets/hazyresearch/ncm-datasets/tree/main/sudoku">test boards</a></td></tr>
-    <tr><td>medium</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/medium/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/medium/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/medium/config.yaml">config.yaml</a></td></tr>
-    <tr><td>hard</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/hard/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/hard/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/hard/config.yaml">config.yaml</a></td></tr>
-    <tr><td rowspan="3"><b>LM1B</b></td><td>small</td><td rowspan="3"><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/small/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/small/config.yaml">config.yaml</a></td><td rowspan="3"><a href="https://huggingface.co/datasets/hazyresearch/ncm-datasets/tree/main/lm1b">tokenized text</a></td></tr>
-    <tr><td>medium</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/medium/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/medium/config.yaml">config.yaml</a></td></tr>
-    <tr><td>large</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/large/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/large/config.yaml">config.yaml</a></td></tr>
+    <tr><td rowspan="3"><b>Sudoku</b></td><td>Easy</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/easy/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/easy/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/easy/config.yaml">config.yaml</a></td><td rowspan="3"><a href="https://huggingface.co/datasets/hazyresearch/ncm-datasets/tree/main/sudoku">test boards</a></td></tr>
+    <tr><td>Medium</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/medium/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/medium/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/medium/config.yaml">config.yaml</a></td></tr>
+    <tr><td>Hard</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/hard/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/hard/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/sudoku/hard/config.yaml">config.yaml</a></td></tr>
+    <tr><td rowspan="3"><b>LM1B</b></td><td>Small</td><td rowspan="3"><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/small/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/small/config.yaml">config.yaml</a></td><td rowspan="3"><a href="https://huggingface.co/datasets/hazyresearch/ncm-datasets/tree/main/lm1b">tokenized text</a></td></tr>
+    <tr><td>Medium</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/medium/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/medium/config.yaml">config.yaml</a></td></tr>
+    <tr><td>Large</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/large/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/lm1b/large/config.yaml">config.yaml</a></td></tr>
     <tr><td rowspan="1"><b>TinyStories</b></td><td>&ndash;</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/tinystories/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/tinystories/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/tinystories/config.yaml">config.yaml</a></td><td rowspan="1"><a href="https://huggingface.co/datasets/hazyresearch/ncm-datasets/tree/main/tinystories">tokenized text</a></td></tr>
     <tr><td rowspan="1"><b>OpenWebText</b></td><td>&ndash;</td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/owt/tokenizer.pt">tokenizer.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/owt/generator.pt">generator.pt</a></td><td><a href="https://huggingface.co/hazyresearch/ncm-checkpoints/blob/main/owt/config.yaml">config.yaml</a></td><td rowspan="1"><a href="https://huggingface.co/datasets/hazyresearch/ncm-datasets/tree/main/owt">tokenized text</a></td></tr>
   </tbody>
@@ -110,7 +110,33 @@ python evaluate.py --config config/eval/<dataset>.yaml --checkpoint-dir artifact
 python evaluate.py --config config/eval/lm1b-<size>.yaml --checkpoint-dir artifacts/lm1b/<size>
 ```
 
-This runs one generation shard per visible GPU, merges them, and prints ROUGE-1/2/L and generative perplexity for XSum; cased and lowercased sacreBLEU, chrF and length ratio for WMT14; solved, cell and valid-grid rates for Sudoku; and generative perplexity under GPT-2 large with unigram entropy, over 5 seeds of 256 unconditional samples, for TinyStories, OpenWebText and LM1B, the latter under the FLM scoring protocol. Add `--cfg <scale>` for classifier-free guidance on XSum and WMT14; the guided WMT14 row uses `--cfg 1.0`.
+Evaluation runs one shard per visible GPU, merges the predictions, and prints task-specific scores. Add `--gpus 0` to use one GPU, or `--cfg <scale>` for classifier-free guidance on XSum and WMT14.
+
+XSum, WMT14 and Sudoku enable soft decisions by default. Set `generation.soft_decisions: false` to disable them, or adjust `generation.soft_temperature`. CLI overrides are `--no-soft-decisions` and `--soft-temperature <value>`; soft temperature is separate from sampling temperature.
+
+Results below use BF16, no guidance, and one H100 80GB. XSum/WMT14 use `--bs 16`; other tasks use their config's batch size. Every conditional test example is included and scored against its complete reference, with no filtering by answer length.
+
+<table>
+  <thead>
+    <tr><th>Task</th><th>Model</th><th colspan="3">Results</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="2"><b>XSum</b></td><td rowspan="2">&ndash;</td><th>ROUGE-1 &uarr;</th><th>ROUGE-2 &uarr;</th><th>ROUGE-L &uarr;</th></tr>
+    <tr><td align="center">36.16</td><td align="center">13.88</td><td align="center">29.57</td></tr>
+    <tr><td rowspan="2"><b>WMT14 De&ndash;En</b></td><td rowspan="2">&ndash;</td><th>BLEU, cased &uarr;</th><th>BLEU, lowercase &uarr;</th><td align="center">&ndash;</td></tr>
+    <tr><td align="center">25.27</td><td align="center">26.20</td><td align="center">&ndash;</td></tr>
+    <tr><td rowspan="4"><b>Sudoku</b></td><td align="center">&ndash;</td><th>Solved (%) &uarr;</th><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
+    <tr><td>Easy</td><td align="center">99.55</td><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
+    <tr><td>Medium</td><td align="center">97.75</td><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
+    <tr><td>Hard</td><td align="center">90.05</td><td align="center">&ndash;</td><td align="center">&ndash;</td></tr>
+    <tr><td rowspan="4"><b>LM1B</b></td><td align="center">&ndash;</td><th>Gen. PPL &darr;</th><th>Entropy &uarr;</th><td align="center">&ndash;</td></tr>
+    <tr><td>Small</td><td align="center">94.76</td><td align="center">4.3158</td><td align="center">&ndash;</td></tr>
+    <tr><td>Medium</td><td align="center">91.30</td><td align="center">4.3469</td><td align="center">&ndash;</td></tr>
+    <tr><td>Large</td><td align="center">83.27</td><td align="center">4.3475</td><td align="center">&ndash;</td></tr>
+    <tr><td rowspan="2"><b>TinyStories</b></td><td rowspan="2">15k EMA</td><th>Gen. PPL &darr;</th><th>Entropy &uarr;</th><td align="center">&ndash;</td></tr>
+    <tr><td align="center">15.54</td><td align="center">3.9733</td><td align="center">&ndash;</td></tr>
+  </tbody>
+</table>
 
 ## Benchmarking
 
@@ -127,15 +153,15 @@ Measured on one NVIDIA H100 80GB with BF16, PyTorch 2.11, CUDA 12.8, and the def
     <tr><th>Task</th><th>Model</th><th>Output<br>tokens</th><th>Levels</th><th>B=1, N=1<br>(ms)</th><th>B=16, N=16<br>(ms)</th><th>B=32, N=32<br>(ms)</th><th>B=16, N=1024<br>(s)</th></tr>
   </thead>
   <tbody>
-    <tr><td rowspan="1"><b>XSum</b></td><td>&ndash;</td><td align="right">48</td><td align="right">9</td><td align="right">11.89</td><td align="right">23.77</td><td align="right">35.90</td><td align="right">1.504</td></tr>
-    <tr><td rowspan="1"><b>WMT14 De&ndash;En</b></td><td>&ndash;</td><td align="right">64</td><td align="right">11</td><td align="right">12.82</td><td align="right">20.58</td><td align="right">28.37</td><td align="right">1.271</td></tr>
-    <tr><td rowspan="3"><b>Sudoku</b></td><td>easy</td><td rowspan="3" align="right">89</td><td rowspan="3" align="right">12</td><td align="right">7.21</td><td align="right">9.17</td><td align="right">11.93</td><td align="right">0.570</td></tr>
-    <tr><td>medium</td><td align="right">7.21</td><td align="right">9.19</td><td align="right">11.85</td><td align="right">0.568</td></tr>
-    <tr><td>hard</td><td align="right">7.24</td><td align="right">9.11</td><td align="right">11.77</td><td align="right">0.527</td></tr>
-    <tr><td rowspan="3"><b>LM1B</b></td><td>small</td><td rowspan="3" align="right">128</td><td rowspan="3" align="right">12</td><td align="right">14.35</td><td align="right">24.44</td><td align="right">34.41</td><td align="right">1.537</td></tr>
-    <tr><td>medium</td><td align="right">28.16</td><td align="right">46.92</td><td align="right">70.92</td><td align="right">2.836</td></tr>
-    <tr><td>large</td><td align="right">47.33</td><td align="right">85.17</td><td align="right">128.63</td><td align="right">5.342</td></tr>
-    <tr><td rowspan="1"><b>TinyStories</b></td><td>&ndash;</td><td align="right">128</td><td align="right">12</td><td align="right">13.04</td><td align="right">20.88</td><td align="right">29.75</td><td align="right">1.311</td></tr>
+    <tr><td rowspan="1"><b>XSum</b></td><td>&ndash;</td><td align="right">48</td><td align="right">9</td><td align="right">12.07</td><td align="right">24.40</td><td align="right">37.25</td><td align="right">1.550</td></tr>
+    <tr><td rowspan="1"><b>WMT14 De&ndash;En</b></td><td>&ndash;</td><td align="right">64</td><td align="right">11</td><td align="right">13.00</td><td align="right">21.27</td><td align="right">29.61</td><td align="right">1.310</td></tr>
+    <tr><td rowspan="3"><b>Sudoku</b></td><td>Easy</td><td rowspan="3" align="right">89</td><td rowspan="3" align="right">12</td><td align="right">7.31</td><td align="right">9.24</td><td align="right">11.97</td><td align="right">0.574</td></tr>
+    <tr><td>Medium</td><td align="right">7.29</td><td align="right">9.10</td><td align="right">12.00</td><td align="right">0.575</td></tr>
+    <tr><td>Hard</td><td align="right">7.25</td><td align="right">9.27</td><td align="right">12.03</td><td align="right">0.575</td></tr>
+    <tr><td rowspan="3"><b>LM1B</b></td><td>Small</td><td rowspan="3" align="right">128</td><td rowspan="3" align="right">12</td><td align="right">14.35</td><td align="right">24.44</td><td align="right">34.41</td><td align="right">1.537</td></tr>
+    <tr><td>Medium</td><td align="right">28.16</td><td align="right">46.92</td><td align="right">70.92</td><td align="right">2.836</td></tr>
+    <tr><td>Large</td><td align="right">47.33</td><td align="right">85.17</td><td align="right">128.63</td><td align="right">5.342</td></tr>
+    <tr><td rowspan="1"><b>TinyStories</b></td><td>&ndash;</td><td align="right">128</td><td align="right">12</td><td align="right">13.17</td><td align="right">20.21</td><td align="right">28.15</td><td align="right">1.246</td></tr>
   </tbody>
 </table>
 

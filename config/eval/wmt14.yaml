@@ -105,6 +105,8 @@ tokenizer:
         - 56
         - 64
 generation:
+  soft_decisions: true
+  soft_temperature: 1.0
   temperature: 1.0
   top_k: 1
   top_p: 0.0

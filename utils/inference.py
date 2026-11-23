@@ -1,5 +1,20 @@
-"""Shared speed flags for the evaluation entry point and its workers."""
+"""Shared inference flags for the evaluation entry point and its workers."""
 import argparse
+import math
+
+
+def positive_temperature(value):
+    value = float(value)
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError("soft temperature must be finite and greater than zero")
+    return value
+
+
+def add_soft_decision_args(parser):
+    parser.add_argument("--soft-decisions", action=argparse.BooleanOptionalAction, default=None,
+                        help="override generation.soft_decisions (otherwise use the config)")
+    parser.add_argument("--soft-temperature", type=positive_temperature, default=None,
+                        help="soft code-mixture temperature, independent of --temp (config value or 1.0)")
 
 
 def add_speed_args(parser):

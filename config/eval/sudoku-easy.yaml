@@ -101,6 +101,8 @@ tokenizer:
           min_keep: 1
     checkpoint_path: tokenizer.pt
 generation:
+  soft_decisions: true
+  soft_temperature: 4.0
   temperature: 0.0
   top_k: 0
   top_p: 1.0
