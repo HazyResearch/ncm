@@ -420,11 +420,20 @@ class NextConceptTransformer(Transformer):
         x = torch.cat([self.l0_queries[:, :1].expand(B, -1, -1).to(prev.dtype), prev], dim=1)
         return x if dtype is None else x.to(dtype)
 
+    @staticmethod
+    def _safe_prefix_pad_mask(pad_mask):
+        # Unmask col 0 strictly on all-True rows so SDPA softmax avoids all--inf NaNs, leaving valid rows unchanged.
+        pad_mask = pad_mask.bool()
+        all_pad = pad_mask.all(dim=1, keepdim=True)
+        col0 = (torch.arange(pad_mask.shape[1], device=pad_mask.device) == 0).unsqueeze(0)
+        return pad_mask.masked_fill(all_pad & col0, False)
+
     def _prefix_pad_bias(self, pad_mask, S, dtype, device):
         B, P = pad_mask.shape
+        safe_mask = self._safe_prefix_pad_mask(pad_mask)
         bias = torch.zeros(B, 1, 1, S, dtype=dtype, device=device)
         bias[:, :, :, :P] = torch.where(
-            pad_mask[:, None, None, :],
+            safe_mask[:, None, None, :],
             torch.tensor(float('-inf'), dtype=dtype, device=device),
             torch.tensor(0.0, dtype=dtype, device=device))
         return bias
@@ -433,7 +442,7 @@ class NextConceptTransformer(Transformer):
         P, l0 = self.prefix_len, self.levels[0]
         if prefix_pad_mask is None:
             return x[:, P - l0:P, :]
-        last = (~prefix_pad_mask).sum(dim=1) - 1
+        last = (~prefix_pad_mask.bool()).sum(dim=1) - 1
         last = last.clamp(min=l0 - 1)
         offs = torch.arange(l0 - 1, -1, -1, device=x.device)
         pos = (last[:, None] - offs[None, :]).clamp(min=0, max=P - 1)
@@ -620,7 +629,7 @@ class NextConceptTransformer(Transformer):
 
         _pbias = None
         if self.prefix_pad_id is not None:
-            _pm = (prefix_tokens[:, :P] == self.prefix_pad_id)
+            _pm = self._safe_prefix_pad_mask(prefix_tokens[:, :P] == self.prefix_pad_id)
             _pbias = torch.zeros(_pm.shape[0], 1, 1, P, device=dev)
             # Avoid host scalar transfers during CUDA graph capture.
             _pbias.masked_fill_(_pm[:, None, None, :], float('-inf'))
