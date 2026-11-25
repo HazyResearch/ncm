@@ -190,6 +190,15 @@ Reproduce each column with the command above, adding `--batch-size B --samples N
       primaryClass={cs.CL},
       url={https://arxiv.org/abs/2610.14162},
 }
+
+@inproceedings{kumbong2025hmar,
+  title={Hmar: Efficient hierarchical masked auto-regressive image generation},
+  author={Kumbong, Hermann and Liu, Xian and Lin, Tsung-Yi and Liu, Ming-Yu and Liu, Xihui and Liu, Ziwei and Fu, Daniel Y and Re, Christopher and Romero, David W},
+  booktitle={2025 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages={2535--2544},
+  year={2025},
+  organization={IEEE}
+}
 ```
 
 Released under the [MIT license](LICENSE).
