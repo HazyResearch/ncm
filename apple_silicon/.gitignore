@@ -1,0 +1,7 @@
+# downloaded / generated (folders or symlinks)
+/artifacts
+/data
+/mlx_weights
+.venv/
+__pycache__/
+*.pyc

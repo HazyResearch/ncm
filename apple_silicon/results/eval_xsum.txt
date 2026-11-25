@@ -1,0 +1,11 @@
+W1108 21:11:56.036000 3111 .venv/lib/python3.12/site-packages/torch/distributed/elastic/multiprocessing/redirects.py:35] NOTE: Redirects are currently not supported in MacOs.
+
+Loading weights:   0%|          | 0/148 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 148/148 [00:00<00:00, 25380.53it/s]
+        xsum · 2000 items · backend mlx         
+┏━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┓
+┃   R-1 ┃   R-2 ┃   R-L ┃ genPPL(gpt2) ┃ words ┃
+┡━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━┩
+│ 34.73 │ 12.51 │ 27.75 │        80.40 │ 20.86 │
+└───────┴───────┴───────┴──────────────┴───────┘
+generation wall-clock 205.1s (9.8 items/s, batch 32); total 214.6s
