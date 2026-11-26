@@ -1,0 +1,84 @@
+task: ncm-tring
+checkpoints:
+  generator: generator_tring.pt
+  tokenizer: tokenizer_tring.pt
+
+model:
+  clss: NCMTringTransformer
+  n_layer: 12
+  n_head: 8
+  n_embd: 512
+  dropout: 0.1
+  bias: false
+  context_length: 129
+  prefix_len: 1
+  raw_token_prefix: true
+  prefix_pad_token_id: 0
+  vocab_size:
+  - 1024
+  - 1024
+  - 1024
+  - 1024
+  - 1024
+  - 1024
+  - 1024
+  - 1024
+  predict_level0: false
+  query_level0: true
+  attn_pattern: block_diagonal
+  use_positional_encoding: true
+  use_level_encoding: true
+  use_rope: true
+  rope_base: 10000
+  use_qk_norm: true
+  use_flex_attention: false
+  shared_output_head: true
+  shared_head_per_level_bias: true
+  use_swiglu: true
+  enable_jacobi: true
+  jacobi_correction_weight: 0.20
+  mcg_momentum_rate: 0.35
+
+tokenizer:
+  pre_tokenizer:
+    name: hf
+    tokenizer: hf
+    model_id: bert-base-uncased
+    special_tokens:
+      eos_token: '[CLS]'
+      pad_token: '[PAD]'
+  vqvae:
+    n_layers: 4
+    embed_dim: 256
+    in_vocab_size: 30528
+    context_length: 128
+    compression_factor: 1
+    dropout: 0.1
+    use_qk_norm: true
+    dec_layers: 2
+    vqvae_vocab_size: 1024
+    vector_quantizer_config:
+      clss: multiscale_residual_fsq
+      commitment_cost: 0.1
+      quant_resi:
+        enabled: true
+        ratio: 0.5
+        share_mode: 0
+      levels:
+      - 1
+      - 4
+      - 8
+      - 16
+      - 32
+      - 64
+      - 96
+      - 128
+
+generation:
+  temperature: 0.85
+  top_k: 40
+  top_p: 0.92
+  use_mcg: true
+  mcg_scale: 1.2
+  anti_repeat_penalty: 1.25
+  jacobi_weight: 0.20

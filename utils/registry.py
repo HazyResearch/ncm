@@ -10,6 +10,7 @@ tokenizers = {
 
 vector_quantizers = {
     "multiscale_residual_vector_quantizer": "models.quant.MultiscaleResidualVectorQuantizer",
+    "multiscale_residual_fsq": "models.fsq_quant.MultiscaleResidualFSQ",
 }
 
 level_schedulers = {
