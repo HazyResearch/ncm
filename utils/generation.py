@@ -88,6 +88,7 @@ class Generator:
             soft_decisions=bool(settings.get('soft_decisions', False)),
             soft_temperature=positive_temperature(settings.get('soft_temperature', 1.0)),
             use_kv_cache=options.kv_cache, return_latent=True, return_trajectory=trajectory,
+            return_codes=False,
         )
         frequency = float(settings.get('frequency_penalty', 0.0))
         deficit = float(settings.get('frequency_deficit', 0.0))

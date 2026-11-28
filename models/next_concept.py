@@ -518,10 +518,13 @@ class NextConceptTransformer(Transformer):
         return embedding
 
     def _sample_level_raw(self, logits, temperature, top_k, top_p):
-        if temperature == 0:
+        if temperature <= 0 or top_k == 1:
             return logits.argmax(dim=-1)
         logits_flat = logits.reshape(-1, logits.shape[-1]) / temperature
         if top_k > 0:
+            top_k = min(int(top_k), logits_flat.shape[-1])
+            if top_k == 1:
+                return logits.argmax(dim=-1)
             # Only the cutoff is needed; the top-k values need not be sorted.
             top_values = torch.topk(logits_flat, top_k, dim=-1, sorted=False).values
             kth = top_values.amin(dim=-1, keepdim=True)
@@ -559,15 +562,19 @@ class NextConceptTransformer(Transformer):
     def generate(self, idx, prefix_tokens, temperature=1.0, top_k=50, top_p=0.9,
                  use_kv_cache=True, cfg_scale=0.0, cfg_null_eos=50256,
                  soft_decisions=False, soft_temperature=1.0, return_latent=False,
-                 return_trajectory=False):
+                 return_trajectory=False, return_codes=True):
         """Generate with request-local prefix caching; soft decisions require return_latent=True.
         Returned latents are [B, L, D], or [B, K, L, D] with return_trajectory=True."""
+        if not return_codes and not return_latent:
+            raise ValueError("return_codes=False requires return_latent=True")
         if soft_decisions and not return_latent:
             raise ValueError("soft_decisions requires return_latent=True; decode the returned latent")
         if return_trajectory and not return_latent:
             raise ValueError("return_trajectory requires return_latent=True")
         if soft_decisions and (not math.isfinite(soft_temperature) or soft_temperature <= 0):
             raise ValueError("soft_temperature must be finite and greater than zero")
+
+        need_codes = return_codes or not soft_decisions
 
         dev = prefix_tokens.device
 
@@ -666,17 +673,21 @@ class NextConceptTransformer(Transformer):
                             for block in self.transformer.blocks:
                                 h = block(h, attn_mask=m0, rope_cos_sin=rope_0)
                         logits = self.lm_heads[0](self.transformer.ln_f(h)[:, P:, :])
-                    codes.append(self._sample_level(
-                        logits[:, t:t + 1, :],
-                        temperature, top_k, top_p))
+                    if need_codes:
+                        codes.append(self._sample_level(
+                            logits[:, t:t + 1, :],
+                            temperature, top_k, top_p))
                     if soft_decisions:
                         soft_codes.append(self._soft_code_embedding(logits[:, t:t + 1, :], 0, soft_temperature))
                     if t + 1 < l0:
-                        known = torch.cat(codes, dim=1)
-                        known_embedding = torch.cat(soft_codes, dim=1) if soft_decisions else _E0(known)
+                        if soft_decisions:
+                            known_embedding = torch.cat(soft_codes, dim=1)
+                        else:
+                            known_embedding = _E0(torch.cat(codes, dim=1))
                         x_in = torch.cat([base_q[:, :1], known_embedding.to(base_q.dtype),
                                           base_q[:, t + 2:]], dim=1)
-                idx = torch.cat(codes, dim=1)
+                if need_codes:
+                    idx = torch.cat(codes, dim=1)
                 if soft_decisions:
                     soft_embedding = torch.cat(soft_codes, dim=1)
             else:
@@ -692,11 +703,12 @@ class NextConceptTransformer(Transformer):
                 h = self.transformer.ln_f(h)
                 if self._cfg is not None: self._cfg["level"] = 0
                 logits = self.lm_heads[0](h[:, P:, :])
-                idx = self._sample_level(logits, temperature, top_k, top_p)
+                if need_codes:
+                    idx = self._sample_level(logits, temperature, top_k, top_p)
                 if soft_decisions:
                     soft_embedding = self._soft_code_embedding(logits, 0, soft_temperature)
 
-        if idx is None:
+        elif idx is None:
             assert self.predict_level0, "generate(idx=None) requires model.predict_level0 or query_level0"
             rope_p = (self.rope_cos_gen_0, self.rope_sin_gen_0) if self.use_rope else None
             h = prefix_emb
@@ -711,11 +723,12 @@ class NextConceptTransformer(Transformer):
             h = self.transformer.ln_f(h)
             l0_logits = self.lm_head_l0(self._level0_slice(h, _pm if self.prefix_pad_id is not None else None))
             if self._cfg is not None: self._cfg["level"] = 0
-            idx = self._sample_level(l0_logits, temperature, top_k, top_p)
+            if need_codes:
+                idx = self._sample_level(l0_logits, temperature, top_k, top_p)
             if soft_decisions:
                 soft_embedding = self._soft_code_embedding(l0_logits, 0, soft_temperature)
 
-        generated_idx = [idx]
+        generated_idx = [idx] if return_codes else None
         idx_next = idx
         if use_kv_cache and prefix_kv is None:
             # The caller supplied level-zero codes, so build the prefix here.
@@ -753,16 +766,17 @@ class NextConceptTransformer(Transformer):
                 if _pbias is not None:
                     lvl_mask = lvl_mask + F.pad(_pbias, (0, L_cur))
                 logits = self._kv_level(x, prefix_kv, lvl_mask, rope_k, _hi)
-                idx_next = self._sample_level(logits, temperature, top_k, top_p)
             else:
                 logits = self._decode_level_logits(x, prefix_emb, level_idx, _pbias, hidx=_hi)
+            if need_codes:
                 idx_next = self._sample_level(logits, temperature, top_k, top_p)
             if soft_decisions:
                 soft_embedding = self._soft_code_embedding(logits, level_idx + 1, soft_temperature)
 
-            generated_idx.append(idx_next)
+            if return_codes:
+                generated_idx.append(idx_next)
             level_acum += self.levels[level_idx+1]
-        out = torch.cat(generated_idx, dim=1)
+        out = torch.cat(generated_idx, dim=1) if return_codes else None
         if return_latent:
             last = len(self.levels) - 1
             z_q_level = soft_embedding if soft_embedding is not None else vq.embeddings[last](idx_next)
@@ -771,7 +785,8 @@ class NextConceptTransformer(Transformer):
                 trajectory.append(z_hat.clone())
                 z_hat = torch.stack(trajectory, dim=1)
         if self._cfg is not None:
-            out = out[:self._cfg["B"]]
+            if out is not None:
+                out = out[:self._cfg["B"]]
             if return_latent:
                 z_hat = z_hat[:self._cfg["B"]]
         self._cfg = None
